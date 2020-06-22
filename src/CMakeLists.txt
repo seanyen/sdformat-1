@@ -137,6 +137,11 @@ if (NOT WIN32)
 endif()
 
 if (NOT WIN32)
+  set(SDF_BUILD_TESTS_EXTRA_EXE_SRCS XmlUtils.cc)
+  sdf_build_tests(XmlUtils_TEST.cc)
+endif()
+
+if (NOT WIN32)
   set(SDF_BUILD_TESTS_EXTRA_EXE_SRCS FrameSemantics.cc)
   sdf_build_tests(FrameSemantics_TEST.cc)
 endif()
