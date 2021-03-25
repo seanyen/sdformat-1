@@ -31,7 +31,13 @@ set (sources
   ForceTorque.cc
   Geometry.cc
   Gui.cc
+  Heightmap.cc
   ign.cc
+  InterfaceFrame.cc
+  InterfaceJoint.cc
+  InterfaceLink.cc
+  InterfaceModel.cc
+  InterfaceModelPoseGraph.cc
   Imu.cc
   Joint.cc
   JointAxis.cc
@@ -45,6 +51,7 @@ set (sources
   Noise.cc
   parser.cc
   parser_urdf.cc
+  ParserConfig.cc
   Param.cc
   Pbr.cc
   Physics.cc
@@ -55,6 +62,7 @@ set (sources
   SDFExtension.cc
   SemanticPose.cc
   Sensor.cc
+  Sky.cc
   Sphere.cc
   Surface.cc
   Types.cc
@@ -101,6 +109,7 @@ if (BUILD_SDF_TEST)
     ForceTorque_TEST.cc
     Geometry_TEST.cc
     Gui_TEST.cc
+    Heightmap_TEST.cc
     Imu_TEST.cc
     Joint_TEST.cc
     JointAxis_TEST.cc
@@ -114,6 +123,7 @@ if (BUILD_SDF_TEST)
     Noise_TEST.cc
     Param_TEST.cc
     parser_TEST.cc
+    ParserConfig_TEST.cc
     Pbr_TEST.cc
     Physics_TEST.cc
     Plane_TEST.cc
@@ -122,6 +132,7 @@ if (BUILD_SDF_TEST)
     SemanticPose_TEST.cc
     SDF_TEST.cc
     Sensor_TEST.cc
+    Sky_TEST.cc
     Sphere_TEST.cc
     Surface_TEST.cc
     Types_TEST.cc
@@ -136,7 +147,16 @@ if (BUILD_SDF_TEST)
     )
   endif()
 
+  include_directories(${PROJECT_SOURCE_DIR}/test)
   sdf_build_tests(${gtest_sources})
+
+  if (TARGET UNIT_ign_TEST)
+    # Link the libraries that we always need.
+    target_link_libraries("UNIT_ign_TEST"
+      PUBLIC
+        ignition-cmake${IGN_CMAKE_VER}::utilities
+    )
+  endif()
 
   if (NOT WIN32)
     set(SDF_BUILD_TESTS_EXTRA_EXE_SRCS Utils.cc)
@@ -182,6 +202,7 @@ target_compile_features(${sdf_target} PUBLIC cxx_std_17)
 target_link_libraries(${sdf_target}
   PUBLIC
     ignition-math${IGN_MATH_VER}::ignition-math${IGN_MATH_VER}
+    ignition-utils${IGN_UTILS_VER}::ignition-utils${IGN_UTILS_VER}
   PRIVATE
     ${TinyXML2_LIBRARIES})
 

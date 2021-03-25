@@ -19,9 +19,13 @@
 
 #include <algorithm>
 #include <string>
+#include <optional>
+#include <utility>
 #include <vector>
 #include "sdf/Error.hh"
 #include "sdf/Element.hh"
+#include "sdf/InterfaceElements.hh"
+#include "sdf/ParserConfig.hh"
 #include "sdf/Types.hh"
 
 namespace sdf
@@ -61,6 +65,25 @@ namespace sdf
   bool loadPose(sdf::ElementPtr _sdf, ignition::math::Pose3d &_pose,
                 std::string &_frame);
 
+  /// \brief If the value is negative, convert it to positive infinity.
+  /// Otherwise, return the original value.
+  /// \param[in] _value The value to convert, if necessary.
+  /// \return Infinity if the input value is negative, otherwise the original
+  /// value.
+  double infiniteIfNegative(double _value);
+
+  /// \brief Handle a condition which can be treated as an error, warning or
+  /// ignored entirely.
+  /// Based on the policy, this will either add it to an errors vector, stream
+  /// it to sdfwarn, or sdfdbg.
+  /// \param[in] _policy The enforcement policy to follow
+  /// \param[in] _error An error object to use if the policy is ERR
+  /// \param[out] _errors The errors to append to if the policy is ERR
+  void enforceConfigurablePolicyCondition(
+    const sdf::EnforcementPolicy _policy,
+    const sdf::Error &_error,
+    sdf::Errors &_errors);
+
   /// \brief Load all objects of a specific sdf element type. No error
   /// is returned if an element is not present. This function assumes that
   /// an element has a "name" attribute that must be unique.
@@ -71,9 +94,9 @@ namespace sdf
   /// exists.
   /// \return The vector of errors. An empty vector indicates no errors were
   /// experienced.
-  template <typename Class>
+  template <typename Class, typename... Args>
   sdf::Errors loadUniqueRepeated(sdf::ElementPtr _sdf,
-      const std::string &_sdfName, std::vector<Class> &_objs)
+      const std::string &_sdfName, std::vector<Class> &_objs, Args&&... _args)
   {
     Errors errors;
 
@@ -89,7 +112,7 @@ namespace sdf
         Class obj;
 
         // Load the model and capture the errors.
-        Errors loadErrors = obj.Load(elem);
+        Errors loadErrors = obj.Load(elem, std::forward<Args>(_args)...);
 
         // keep processing even if there are loadErrors
         {
@@ -174,6 +197,38 @@ namespace sdf
 
     return errors;
   }
+
+  /// \brief Load interface models from //include tags.
+  /// \param[in] _sdf sdf::ElementPtr that contains the //include tags.
+  /// \param[in] _config Parser configuration options.
+  /// \param[out] _models Loaded interface models
+  /// \return Errors encountered.
+  sdf::Errors loadIncludedInterfaceModels(sdf::ElementPtr _sdf,
+      const sdf::ParserConfig &_config,
+      std::vector<std::pair<NestedInclude, InterfaceModelPtr>> &_models);
+
+  /// \brief Convenience function that returns a pointer to the value contained
+  /// in a std::optional.
+  /// \tparam T type of object contained in the std::optional
+  /// \param[in] _opt Input optional object.
+  /// \return A pointer to the value contained in the optional. A nullptr is
+  /// returned if the optional does not contain a value.
+  template <typename T>
+  T *optionalToPointer(std::optional<T> &_opt)
+  {
+    if (_opt)
+      return &_opt.value();
+    return nullptr;
   }
+
+  /// \brief const overload of optionalToPointer(std::optional<T> &_opt)
+  template <typename T>
+  const T *optionalToPointer(const std::optional<T> &_opt)
+  {
+    if (_opt)
+      return &_opt.value();
+    return nullptr;
+  }
+}
 }
 #endif

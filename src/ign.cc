@@ -41,7 +41,7 @@ extern "C" SDFORMAT_VISIBLE int cmdCheck(const char *_path)
   {
     for (auto &error : errors)
     {
-      std::cerr << "Error: " << error.Message() << std::endl;
+      std::cerr << error << std::endl;
     }
     return -1;
   }
@@ -187,9 +187,10 @@ extern "C" SDFORMAT_VISIBLE int cmdGraph(
     {
       errors = sdf::buildPoseRelativeToGraph(graph, root.WorldByIndex(0));
     }
-    else if (root.ModelCount() > 0)
+    else if (root.Model() != nullptr)
     {
-      errors = sdf::buildPoseRelativeToGraph(graph, root.ModelByIndex(0));
+      errors =
+        sdf::buildPoseRelativeToGraph(graph, root.Model());
     }
 
     if (!errors.empty())
@@ -206,9 +207,10 @@ extern "C" SDFORMAT_VISIBLE int cmdGraph(
     {
       errors = sdf::buildFrameAttachedToGraph(graph, root.WorldByIndex(0));
     }
-    else if (root.ModelCount() > 0)
+    else if (root.Model() != nullptr)
     {
-      errors = sdf::buildFrameAttachedToGraph(graph, root.ModelByIndex(0));
+      errors =
+        sdf::buildFrameAttachedToGraph(graph, root.Model());
     }
 
     if (!errors.empty())

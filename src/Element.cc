@@ -195,6 +195,11 @@ ElementPtr Element::Clone() const
     clone->dataPtr->value = this->dataPtr->value->Clone();
   }
 
+  if (this->dataPtr->includeElement)
+  {
+    clone->dataPtr->includeElement = this->dataPtr->includeElement->Clone();
+  }
+
   return clone;
 }
 
@@ -250,6 +255,18 @@ void Element::Copy(const ElementPtr _elem)
     elem->SetParent(shared_from_this());
     this->dataPtr->elements.push_back(elem);
   }
+
+  if (_elem->dataPtr->includeElement)
+  {
+    if (!this->dataPtr->includeElement)
+    {
+      this->dataPtr->includeElement = _elem->dataPtr->includeElement->Clone();
+    }
+    else
+    {
+      this->dataPtr->includeElement->Copy(_elem->dataPtr->includeElement);
+    }
+  }
 }
 
 /////////////////////////////////////////////////
@@ -279,8 +296,9 @@ void Element::PrintDescription(const std::string &_prefix) const
 
   std::cout << ">\n";
 
-  std::cout << _prefix << "  <description>" << this->dataPtr->description
-            << "</description>\n";
+  std::cout << _prefix << "  <description><![CDATA["
+            << this->dataPtr->description
+            << "]]></description>\n";
 
   Param_V::iterator aiter;
   for (aiter = this->dataPtr->attributes.begin();
@@ -290,8 +308,9 @@ void Element::PrintDescription(const std::string &_prefix) const
               << (*aiter)->GetKey() << "' type ='" << (*aiter)->GetTypeName()
               << "' default ='" << (*aiter)->GetDefaultAsString()
               << "' required ='" << (*aiter)->GetRequired() << "'>\n";
-    std::cout << _prefix << "    <description>" << (*aiter)->GetDescription()
-              << "</description>\n";
+    std::cout << _prefix << "    <description><![CDATA["
+              << (*aiter)->GetDescription()
+              << "]]></description>\n";
     std::cout << _prefix << "  </attribute>\n";
   }
 
@@ -908,6 +927,18 @@ void Element::SetInclude(const std::string &_filename)
 std::string Element::GetInclude() const
 {
   return this->dataPtr->includeFilename;
+}
+
+/////////////////////////////////////////////////
+void Element::SetIncludeElement(sdf::ElementPtr _includeElem)
+{
+  this->dataPtr->includeElement = _includeElem;
+}
+
+/////////////////////////////////////////////////
+sdf::ElementPtr Element::GetIncludeElement() const
+{
+  return this->dataPtr->includeElement;
 }
 
 /////////////////////////////////////////////////

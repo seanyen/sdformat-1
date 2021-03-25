@@ -34,14 +34,10 @@
 #include "sdf/World.hh"
 #include "test_config.h"
 
-const auto g_testPath = sdf::filesystem::append(PROJECT_SOURCE_PATH, "test");
-const auto g_modelsPath =
-    sdf::filesystem::append(g_testPath, "integration", "model");
-
 /////////////////////////////////////////////////
 std::string findFileCb(const std::string &_input)
 {
-  return sdf::filesystem::append(g_testPath, "integration", "model", _input);
+  return sdf::testing::TestFile("integration", "model", _input);
 }
 
 //////////////////////////////////////////////////
@@ -49,8 +45,7 @@ TEST(IncludesTest, Includes)
 {
   sdf::setFindCallback(findFileCb);
 
-  const auto worldFile =
-    sdf::filesystem::append(g_testPath, "sdf", "includes.sdf");
+  const auto worldFile = sdf::testing::TestFile("sdf", "includes.sdf");
 
   sdf::Root root;
   sdf::Errors errors = root.Load(worldFile);
@@ -60,11 +55,11 @@ TEST(IncludesTest, Includes)
 
   ASSERT_NE(nullptr, root.Element());
   EXPECT_EQ(worldFile, root.Element()->FilePath());
-  EXPECT_EQ("1.6", root.Element()->OriginalVersion());
+  EXPECT_EQ("1.8", root.Element()->OriginalVersion());
 
   const sdf::World *world = root.WorldByIndex(0);
   ASSERT_NE(nullptr, world);
-  EXPECT_EQ("1.6", world->Element()->OriginalVersion());
+  EXPECT_EQ("1.8", world->Element()->OriginalVersion());
 
   // Actors
   EXPECT_EQ(2u, world->ActorCount());
@@ -77,8 +72,8 @@ TEST(IncludesTest, Includes)
   const auto *actor = world->ActorByIndex(0);
   EXPECT_EQ("1.6", actor->Element()->OriginalVersion());
 
-  const auto actorFile = sdf::filesystem::append(g_modelsPath, "test_actor",
-      "model.sdf");
+  const auto actorFile = sdf::testing::TestFile(
+      "integration", "model", "test_actor", "model.sdf");
   EXPECT_EQ(actorFile, actor->FilePath());
 
   EXPECT_EQ("actor", actor->Name());
@@ -149,7 +144,7 @@ TEST(IncludesTest, Includes)
   EXPECT_EQ("", pointLight1->PoseRelativeTo());
 
   // Models
-  EXPECT_EQ(2u, world->ModelCount());
+  EXPECT_EQ(3u, world->ModelCount());
   EXPECT_FALSE(world->ModelNameExists(""));
 
   // Model without overrides
@@ -166,8 +161,8 @@ TEST(IncludesTest, Includes)
   EXPECT_FALSE(model->LinkNameExists("coconut"));
   EXPECT_EQ("1.6", model->Element()->OriginalVersion());
 
-  const auto modelFile = sdf::filesystem::append(g_modelsPath, "test_model",
-      "model.sdf");
+  const auto modelFile = sdf::testing::TestFile(
+      "integration", "model", "test_model", "model.sdf");
 
   const auto *link = model->LinkByName("link");
   ASSERT_NE(nullptr, link);
@@ -209,6 +204,19 @@ TEST(IncludesTest, Includes)
   EXPECT_EQ("", model1->PoseRelativeTo());
   ASSERT_NE(nullptr, model1->Element());
   EXPECT_TRUE(model1->Element()->HasElement("plugin"));
+
+  const sdf::Model *model2 = world->ModelByIndex(2);
+  ASSERT_NE(nullptr, model2);
+  EXPECT_EQ("test_model_with_file", model2->Name());
+  EXPECT_FALSE(model2->Static());
+  EXPECT_EQ(1u, model2->LinkCount());
+  ASSERT_NE(nullptr, model2->LinkByIndex(0));
+  ASSERT_NE(nullptr, model2->LinkByName("link"));
+  EXPECT_EQ(model2->LinkByName("link")->Name(), model2->LinkByIndex(0)->Name());
+  EXPECT_EQ(nullptr, model2->LinkByIndex(1));
+  EXPECT_TRUE(model2->LinkNameExists("link"));
+  EXPECT_FALSE(model2->LinkNameExists("coconut"));
+  EXPECT_EQ("1.6", model2->Element()->OriginalVersion());
 }
 
 //////////////////////////////////////////////////
@@ -216,8 +224,7 @@ TEST(IncludesTest, Includes_15)
 {
   sdf::setFindCallback(findFileCb);
 
-  const auto worldFile =
-    sdf::filesystem::append(g_testPath, "sdf", "includes_1.5.sdf");
+  const auto worldFile = sdf::testing::TestFile("sdf", "includes_1.5.sdf");
 
   sdf::Root root;
   sdf::Errors errors = root.Load(worldFile);
@@ -273,8 +280,7 @@ TEST(IncludesTest, Includes_15_convert)
 {
   sdf::setFindCallback(findFileCb);
 
-  const auto worldFile =
-    sdf::filesystem::append(g_testPath, "sdf", "includes_1.5.sdf");
+  const auto worldFile = sdf::testing::TestFile("sdf", "includes_1.5.sdf");
 
   sdf::SDFPtr sdf(new sdf::SDF());
   sdf::init(sdf);
@@ -317,4 +323,41 @@ TEST(IncludesTest, Includes_15_convert)
   EXPECT_EQ("1.6", lightElem->OriginalVersion());
   EXPECT_EQ("1.6", modelElem->OriginalVersion());
   EXPECT_EQ("1.6", linkElem->OriginalVersion());
+}
+
+//////////////////////////////////////////////////
+TEST(IncludesTest, IncludeModelMissingConfig)
+{
+  sdf::setFindCallback(findFileCb);
+
+  std::ostringstream stream;
+  stream
+    << "<sdf version='" << SDF_VERSION << "'>"
+    << "<include>"
+    << "  <uri>box_missing_config</uri>"
+    << "</include>"
+    << "</sdf>";
+
+  sdf::SDFPtr sdfParsed(new sdf::SDF());
+  sdf::init(sdfParsed);
+  sdf::Errors errors;
+  ASSERT_TRUE(sdf::readString(stream.str(), sdfParsed, errors));
+
+  ASSERT_GE(1u, errors.size());
+  EXPECT_EQ(1u, errors.size());
+  std::cout << errors[0] << std::endl;
+  EXPECT_EQ(errors[0].Code(), sdf::ErrorCode::URI_LOOKUP);
+  EXPECT_NE(std::string::npos, errors[0].Message().find(
+      "Unable to resolve uri[box_missing_config] to model path")) << errors[0];
+  EXPECT_NE(std::string::npos, errors[0].Message().find(
+      "box_missing_config] since it does not contain a model.config file"))
+    << errors[0];
+
+  sdf::Root root;
+  errors = root.Load(sdfParsed);
+  for (auto e : errors)
+    std::cout << e.Message() << std::endl;
+  EXPECT_TRUE(errors.empty());
+
+  EXPECT_EQ(nullptr, root.Model());
 }

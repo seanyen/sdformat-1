@@ -20,6 +20,7 @@
 
 #include "sdf/Element.hh"
 #include "sdf/Filesystem.hh"
+#include "sdf/ForceTorque.hh"
 #include "sdf/Frame.hh"
 #include "sdf/Joint.hh"
 #include "sdf/JointAxis.hh"
@@ -27,6 +28,7 @@
 #include "sdf/Model.hh"
 #include "sdf/Root.hh"
 #include "sdf/SDFImpl.hh"
+#include "sdf/Sensor.hh"
 #include "sdf/Types.hh"
 #include "sdf/parser.hh"
 #include "test_config.h"
@@ -64,15 +66,14 @@ TEST(DOMJoint, NoName)
 TEST(DOMJoint, DoublePendulum)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "double_pendulum.sdf");
+    sdf::testing::TestFile("sdf", "double_pendulum.sdf");
 
   // Load the SDF file
   sdf::Root root;
   EXPECT_TRUE(root.Load(testFile).empty());
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
 
   // The double pendulum should have two joints.
@@ -118,8 +119,7 @@ TEST(DOMJoint, DoublePendulum)
 TEST(DOMJoint, Complete)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "joint_complete.sdf");
+    sdf::testing::TestFile("sdf", "joint_complete.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -127,7 +127,7 @@ TEST(DOMJoint, Complete)
   EXPECT_TRUE(errors.empty());
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
 
   std::vector<ignition::math::Pose3d> jointPoses =
@@ -161,8 +161,7 @@ TEST(DOMJoint, Complete)
 TEST(DOMJoint, LoadJointParentWorld)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "joint_parent_world.sdf");
+    sdf::testing::TestFile("sdf", "joint_parent_world.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -171,7 +170,7 @@ TEST(DOMJoint, LoadJointParentWorld)
   using Pose = ignition::math::Pose3d;
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("joint_parent_world", model->Name());
   EXPECT_EQ(1u, model->LinkCount());
@@ -212,16 +211,14 @@ TEST(DOMJoint, LoadJointParentWorld)
 TEST(DOMJoint, LoadInvalidJointChildWorld)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "joint_child_world.sdf");
+    sdf::testing::TestFile("sdf", "joint_child_world.sdf");
 
   // Load the SDF file
   sdf::Root root;
   auto errors = root.Load(testFile);
   for (auto e : errors)
     std::cout << e << std::endl;
-  EXPECT_FALSE(errors.empty());
-  EXPECT_EQ(7u, errors.size());
+  ASSERT_EQ(7u, errors.size());
   EXPECT_EQ(errors[0].Code(), sdf::ErrorCode::JOINT_CHILD_LINK_INVALID);
   EXPECT_NE(std::string::npos,
     errors[0].Message().find(
@@ -247,7 +244,7 @@ TEST(DOMJoint, LoadJointParentFrame)
   using Pose = ignition::math::Pose3d;
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("joint_parent_frame", model->Name());
   EXPECT_EQ(2u, model->LinkCount());
@@ -340,7 +337,7 @@ TEST(DOMJoint, LoadJointChildFrame)
   using Pose = ignition::math::Pose3d;
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("joint_child_frame", model->Name());
   EXPECT_EQ(2u, model->LinkCount());
@@ -423,8 +420,7 @@ TEST(DOMJoint, LoadJointChildFrame)
 TEST(DOMJoint, LoadJointPoseRelativeTo)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "model_joint_relative_to.sdf");
+    sdf::testing::TestFile("sdf", "model_joint_relative_to.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -433,7 +429,7 @@ TEST(DOMJoint, LoadJointPoseRelativeTo)
   using Pose = ignition::math::Pose3d;
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("model_joint_relative_to", model->Name());
   EXPECT_EQ(4u, model->LinkCount());
@@ -518,7 +514,7 @@ TEST(DOMJoint, LoadJointPoseRelativeTo)
 TEST(DOMJoint, LoadInvalidJointPoseRelativeTo)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
+    sdf::testing::TestFile("sdf",
         "model_invalid_joint_relative_to.sdf");
 
   // Load the SDF file
@@ -547,8 +543,7 @@ TEST(DOMJoint, LoadInvalidJointPoseRelativeTo)
 TEST(DOMJoint, LoadInvalidChild)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "joint_invalid_child.sdf");
+    sdf::testing::TestFile("sdf", "joint_invalid_child.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -577,7 +572,7 @@ TEST(DOMJoint, LoadInvalidChild)
 TEST(DOMJoint, LoadLinkJointSameName17Invalid)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
+    sdf::testing::TestFile("sdf",
         "model_link_joint_same_name.sdf");
 
   // Read with sdf::readFile, which converts from 1.6 to latest
@@ -608,8 +603,7 @@ TEST(DOMJoint, LoadLinkJointSameName17Invalid)
 TEST(DOMJoint, LoadLinkJointSameName16Valid)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "model_link_joint_same_name.sdf");
+    sdf::testing::TestFile("sdf", "model_link_joint_same_name.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -621,7 +615,7 @@ TEST(DOMJoint, LoadLinkJointSameName16Valid)
   using Pose = ignition::math::Pose3d;
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("link_joint_same_name", model->Name());
   EXPECT_EQ(2u, model->LinkCount());
@@ -687,8 +681,7 @@ TEST(DOMJoint, LoadLinkJointSameName16Valid)
 TEST(DOMJoint, LoadURDFJointPoseRelativeTo)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "integration",
-        "provide_feedback.urdf");
+    sdf::testing::TestFile("integration", "provide_feedback.urdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -701,7 +694,7 @@ TEST(DOMJoint, LoadURDFJointPoseRelativeTo)
   using Vector3 = ignition::math::Vector3d;
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("provide_feedback_test", model->Name());
   EXPECT_EQ(3u, model->LinkCount());
@@ -782,7 +775,7 @@ TEST(DOMJoint, LoadJointNestedParentChild)
   using Pose = ignition::math::Pose3d;
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
 
   {
@@ -865,4 +858,44 @@ TEST(DOMJoint, LoadJointNestedParentChild)
     EXPECT_TRUE(j5->SemanticPose().Resolve(pose, "__model__").empty());
     EXPECT_EQ(Pose(0, -1, 1, IGN_PI_2, 0, 0), pose);
   }
+}
+
+
+//////////////////////////////////////////////////
+TEST(DOMJoint, Sensors)
+{
+  const std::string testFile =
+      sdf::testing::TestFile("sdf", "joint_sensors.sdf");
+
+  // Load the SDF file
+  sdf::Root root;
+  auto errors = root.Load(testFile);
+  EXPECT_TRUE(errors.empty()) << errors;
+
+  // Get the first model
+  const sdf::Model *model = root.Model();
+  ASSERT_NE(nullptr, model);
+  EXPECT_EQ("model", model->Name());
+
+  // Get the first joint
+  const sdf::Joint *joint = model->JointByIndex(0);
+  ASSERT_NE(nullptr, joint);
+  EXPECT_EQ("joint", joint->Name());
+  EXPECT_EQ(1u, joint->SensorCount());
+
+  ignition::math::Pose3d pose;
+
+  // Get the force_torque sensor
+  const sdf::Sensor *forceTorqueSensor =
+    joint->SensorByName("force_torque_sensor");
+  ASSERT_NE(nullptr, forceTorqueSensor);
+  EXPECT_EQ("force_torque_sensor", forceTorqueSensor->Name());
+  EXPECT_EQ(sdf::SensorType::FORCE_TORQUE, forceTorqueSensor->Type());
+  EXPECT_EQ(ignition::math::Pose3d(10, 11, 12, 0, 0, 0),
+      forceTorqueSensor->RawPose());
+  auto forceTorqueSensorConfig = forceTorqueSensor->ForceTorqueSensor();
+  ASSERT_NE(nullptr, forceTorqueSensorConfig);
+  EXPECT_EQ(sdf::ForceTorqueFrame::PARENT, forceTorqueSensorConfig->Frame());
+  EXPECT_EQ(sdf::ForceTorqueMeasureDirection::PARENT_TO_CHILD,
+      forceTorqueSensorConfig->MeasureDirection());
 }

@@ -20,6 +20,7 @@
 #include <memory>
 #include <string>
 #include <ignition/math/Pose3.hh>
+#include <ignition/utils/ImplPtr.hh>
 #include "sdf/Element.hh"
 #include "sdf/SemanticPose.hh"
 #include "sdf/Types.hh"
@@ -34,10 +35,10 @@ namespace sdf
 
   // Forward declarations.
   class JointAxis;
-  class JointPrivate;
   struct FrameAttachedToGraph;
   struct PoseRelativeToGraph;
   template <typename T> class ScopedGraph;
+  class Sensor;
 
   /// \enum JointType
   /// \brief The set of joint types. INVALID indicates that joint type has
@@ -85,27 +86,6 @@ namespace sdf
   {
     /// \brief Default constructor
     public: Joint();
-
-    /// \brief Copy constructor
-    /// \param[in] _joint Joint to copy.
-    public: Joint(const Joint &_joint);
-
-    /// \brief Move constructor
-    /// \param[in] _joint Joint to move.
-    public: Joint(Joint &&_joint) noexcept;
-
-    /// \brief Move assignment operator.
-    /// \param[in] _joint Joint to move.
-    /// \return Reference to this.
-    public: Joint &operator=(Joint &&_joint);
-
-    /// \brief Copy assignment operator.
-    /// \param[in] _joint Joint to copy.
-    /// \return Reference to this.
-    public: Joint &operator=(const Joint &_joint);
-
-    /// \brief Destructor
-    public: ~Joint();
 
     /// \brief Load the joint based on a element pointer. This is *not* the
     /// usual entry point. Typical usage of the SDF DOM is through the Root
@@ -222,6 +202,29 @@ namespace sdf
     /// \return SemanticPose object for this link.
     public: sdf::SemanticPose SemanticPose() const;
 
+    /// \brief Get the number of sensors.
+    /// \return Number of sensors contained in this Joint object.
+    public: uint64_t SensorCount() const;
+
+    /// \brief Get a sensor based on an index.
+    /// \param[in] _index Index of the sensor. The index should be in the
+    /// range [0..SensorCount()).
+    /// \return Pointer to the sensor. Nullptr if the index does not exist.
+    /// \sa uint64_t SensorCount() const
+    public: const Sensor *SensorByIndex(const uint64_t _index) const;
+
+    /// \brief Get whether a sensor name exists.
+    /// \param[in] _name Name of the sensor to check.
+    /// \return True if there exists a sensor with the given name.
+    public: bool SensorNameExists(const std::string &_name) const;
+
+    /// \brief Get a sensor based on a name.
+    /// \param[in] _name Name of the sensor.
+    /// \return Pointer to the sensor. Nullptr if a sensor with the given name
+    ///  does not exist.
+    /// \sa bool SensorNameExists(const std::string &_name) const
+    public: const Sensor *SensorByName(const std::string &_name) const;
+
     /// \brief Give the scoped FrameAttachedToGraph to be used for resolving
     /// parent and child link names. This is private and is intended to be
     /// called by Model::Load.
@@ -239,7 +242,7 @@ namespace sdf
     friend class Model;
 
     /// \brief Private data pointer.
-    private: JointPrivate *dataPtr = nullptr;
+    IGN_UTILS_IMPL_PTR(dataPtr)
   };
   }
 }

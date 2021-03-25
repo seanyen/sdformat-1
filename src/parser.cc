@@ -34,6 +34,7 @@
 #include "sdf/SDFImpl.hh"
 #include "sdf/World.hh"
 #include "sdf/parser.hh"
+#include "sdf/ParserConfig.hh"
 #include "sdf/sdf_config.h"
 
 #include "Converter.hh"
@@ -54,14 +55,16 @@ inline namespace SDF_VERSION_NAMESPACE {
 /// file it is converted to SDF first. Conversion to the latest
 /// SDF version is controlled by a function parameter.
 /// \param[in] _filename Name of the SDF file
-/// \param[in] _sdf Pointer to an SDF object.
 /// \param[in] _convert Convert to the latest version if true.
+/// \param[in] _config Custom parser configuration
+/// \param[out] _sdf Pointer to an SDF object.
 /// \param[out] _errors Parsing errors will be appended to this variable.
 /// \return True if successful.
 bool readFileInternal(
     const std::string &_filename,
-    SDFPtr _sdf,
     const bool _convert,
+    const ParserConfig &_config,
+    SDFPtr _sdf,
     Errors &_errors);
 
 /// \brief Internal helper for readString, which populates the SDF values
@@ -71,21 +74,51 @@ bool readFileInternal(
 /// file it is converted to SDF first. Conversion to the latest
 /// SDF version is controlled by a function parameter.
 /// \param[in] _xmlString XML string to be parsed.
-/// \param[in] _sdf Pointer to an SDF object.
 /// \param[in] _convert Convert to the latest version if true.
+/// \param[in] _config Custom parser configuration
+/// \param[out] _sdf Pointer to an SDF object.
 /// \param[out] _errors Parsing errors will be appended to this variable.
 /// \return True if successful.
 bool readStringInternal(
     const std::string &_xmlString,
-    SDFPtr _sdf,
     const bool _convert,
+    const ParserConfig &_config,
+    SDFPtr _sdf,
     Errors &_errors);
+
+//////////////////////////////////////////////////
+/// \brief Internal helper for creating XMLDocuments
+///
+/// This creates an XMLDocument with whitespace collapse
+/// on, which is not default behavior in tinyxml2.
+/// This function is to consolidate locations it is used.
+///
+/// There is a performance impact associated with collapsing whitespace.
+///
+/// For more information on the behavior and performance implications,
+/// consult the TinyXML2 documentation: https://leethomason.github.io/tinyxml2/
+inline auto makeSdfDoc()
+{
+  return tinyxml2::XMLDocument(true, tinyxml2::COLLAPSE_WHITESPACE);
+}
+
+//////////////////////////////////////////////////
+static bool isSdfFile(const std::string &_fileName)
+{
+  std::size_t periodIndex = _fileName.rfind('.');
+  if (periodIndex != std::string::npos)
+  {
+    const std::string ext = _fileName.substr(periodIndex);
+    return ext == ".sdf" || ext == ".world";
+  }
+  return false;
+}
 
 //////////////////////////////////////////////////
 template <typename TPtr>
 static inline bool _initFile(const std::string &_filename, TPtr _sdf)
 {
-  tinyxml2::XMLDocument xmlDoc;
+  auto xmlDoc = makeSdfDoc();
   if (tinyxml2::XML_SUCCESS != xmlDoc.LoadFile(_filename.c_str()))
   {
     sdferr << "Unable to load file["
@@ -100,7 +133,7 @@ static inline bool _initFile(const std::string &_filename, TPtr _sdf)
 bool init(SDFPtr _sdf)
 {
   std::string xmldata = SDF::EmbeddedSpec("root.sdf", false);
-  tinyxml2::XMLDocument xmlDoc;
+  auto xmlDoc = makeSdfDoc();
   xmlDoc.Parse(xmldata.c_str());
   return initDoc(&xmlDoc, _sdf);
 }
@@ -108,33 +141,48 @@ bool init(SDFPtr _sdf)
 //////////////////////////////////////////////////
 bool initFile(const std::string &_filename, SDFPtr _sdf)
 {
+  return initFile(_filename, ParserConfig::GlobalConfig(), _sdf);
+}
+
+//////////////////////////////////////////////////
+bool initFile(
+    const std::string &_filename, const ParserConfig &_config, SDFPtr _sdf)
+{
   std::string xmldata = SDF::EmbeddedSpec(_filename, true);
   if (!xmldata.empty())
   {
-    tinyxml2::XMLDocument xmlDoc;
+    auto xmlDoc = makeSdfDoc();
     xmlDoc.Parse(xmldata.c_str());
     return initDoc(&xmlDoc, _sdf);
   }
-  return _initFile(sdf::findFile(_filename), _sdf);
+  return _initFile(sdf::findFile(_filename, true, false, _config), _sdf);
 }
 
 //////////////////////////////////////////////////
 bool initFile(const std::string &_filename, ElementPtr _sdf)
 {
-  std::string xmldata = SDF::EmbeddedSpec(_filename, true);
-  if (!xmldata.empty())
-  {
-    tinyxml2::XMLDocument xmlDoc;
-    xmlDoc.Parse(xmldata.c_str());
-    return initDoc(&xmlDoc, _sdf);
-  }
-  return _initFile(sdf::findFile(_filename), _sdf);
+  return initFile(_filename, ParserConfig::GlobalConfig(), _sdf);
 }
 
 //////////////////////////////////////////////////
-bool initString(const std::string &_xmlString, SDFPtr _sdf)
+bool initFile(
+    const std::string &_filename, const ParserConfig &_config, ElementPtr _sdf)
 {
-  tinyxml2::XMLDocument xmlDoc;
+  std::string xmldata = SDF::EmbeddedSpec(_filename, true);
+  if (!xmldata.empty())
+  {
+    auto xmlDoc = makeSdfDoc();
+    xmlDoc.Parse(xmldata.c_str());
+    return initDoc(&xmlDoc, _sdf);
+  }
+  return _initFile(sdf::findFile(_filename, true, false, _config), _sdf);
+}
+
+//////////////////////////////////////////////////
+bool initString(
+    const std::string &_xmlString, const ParserConfig &, SDFPtr _sdf)
+{
+  auto xmlDoc = makeSdfDoc();
   if (xmlDoc.Parse(_xmlString.c_str()))
   {
     sdferr << "Failed to parse string as XML: " << xmlDoc.ErrorStr() << '\n';
@@ -142,6 +190,12 @@ bool initString(const std::string &_xmlString, SDFPtr _sdf)
   }
 
   return initDoc(&xmlDoc, _sdf);
+}
+
+//////////////////////////////////////////////////
+bool initString(const std::string &_xmlString, SDFPtr _sdf)
+{
+  return initString(_xmlString, ParserConfig::GlobalConfig(), _sdf);
 }
 
 //////////////////////////////////////////////////
@@ -337,12 +391,19 @@ bool initXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf)
 //////////////////////////////////////////////////
 SDFPtr readFile(const std::string &_filename, Errors &_errors)
 {
+  return readFile(_filename, ParserConfig::GlobalConfig(), _errors);
+}
+
+//////////////////////////////////////////////////
+SDFPtr readFile(
+    const std::string &_filename, const ParserConfig &_config, Errors &_errors)
+{
   // Create and initialize the data structure that will hold the parsed SDF data
   sdf::SDFPtr sdfParsed(new sdf::SDF());
   sdf::init(sdfParsed);
 
   // Read an SDF file, and store the result in sdfParsed.
-  if (!sdf::readFile(_filename, sdfParsed, _errors))
+  if (!sdf::readFile(_filename, _config, sdfParsed, _errors))
   {
     return SDFPtr();
   }
@@ -379,22 +440,37 @@ bool readFile(const std::string &_filename, SDFPtr _sdf)
 //////////////////////////////////////////////////
 bool readFile(const std::string &_filename, SDFPtr _sdf, Errors &_errors)
 {
-  return readFileInternal(_filename, _sdf, true, _errors);
+  return readFile(_filename, ParserConfig::GlobalConfig(), _sdf, _errors);
+}
+
+//////////////////////////////////////////////////
+bool readFile(const std::string &_filename, const ParserConfig &_config,
+    SDFPtr _sdf, Errors &_errors)
+{
+  return readFileInternal(_filename, true, _config, _sdf, _errors);
 }
 
 //////////////////////////////////////////////////
 bool readFileWithoutConversion(
     const std::string &_filename, SDFPtr _sdf, Errors &_errors)
 {
-  return readFileInternal(_filename, _sdf, false, _errors);
+  return readFileWithoutConversion(
+      _filename, ParserConfig::GlobalConfig(), _sdf, _errors);
 }
 
 //////////////////////////////////////////////////
-bool readFileInternal(const std::string &_filename, SDFPtr _sdf,
-      const bool _convert, Errors &_errors)
+bool readFileWithoutConversion(const std::string &_filename,
+    const ParserConfig &_config, SDFPtr _sdf, Errors &_errors)
 {
-  tinyxml2::XMLDocument xmlDoc;
-  std::string filename = sdf::findFile(_filename, true, true);
+  return readFileInternal(_filename, false, _config, _sdf, _errors);
+}
+
+//////////////////////////////////////////////////
+bool readFileInternal(const std::string &_filename, const bool _convert,
+    const ParserConfig &_config, SDFPtr _sdf, Errors &_errors)
+{
+  auto xmlDoc = makeSdfDoc();
+  std::string filename = sdf::findFile(_filename, true, true, _config);
 
   if (filename.empty())
   {
@@ -422,16 +498,16 @@ bool readFileInternal(const std::string &_filename, SDFPtr _sdf,
   }
 
   // Suppress deprecation for sdf::URDF2SDF
-  if (readDoc(&xmlDoc, _sdf, filename, _convert, _errors))
+  if (readDoc(&xmlDoc, _sdf, filename, _convert, _config, _errors))
   {
     return true;
   }
   else if (URDF2SDF::IsURDF(filename))
   {
     URDF2SDF u2g;
-    tinyxml2::XMLDocument doc;
+    auto doc = makeSdfDoc();
     u2g.InitModelFile(filename, &doc);
-    if (sdf::readDoc(&doc, _sdf, "urdf file", _convert, _errors))
+    if (sdf::readDoc(&doc, _sdf, "urdf file", _convert, _config, _errors))
     {
       sdfdbg << "parse from urdf file [" << _filename << "].\n";
       return true;
@@ -462,38 +538,53 @@ bool readString(const std::string &_xmlString, SDFPtr _sdf)
 //////////////////////////////////////////////////
 bool readString(const std::string &_xmlString, SDFPtr _sdf, Errors &_errors)
 {
-  return readStringInternal(_xmlString, _sdf, true, _errors);
+  return readString(_xmlString, ParserConfig::GlobalConfig(), _sdf, _errors);
+}
+
+//////////////////////////////////////////////////
+bool readString(const std::string &_xmlString, const ParserConfig &_config,
+    SDFPtr _sdf, Errors &_errors)
+{
+  return readStringInternal(_xmlString, true, _config, _sdf, _errors);
 }
 
 //////////////////////////////////////////////////
 bool readStringWithoutConversion(
     const std::string &_filename, SDFPtr _sdf, Errors &_errors)
 {
-  return readStringInternal(_filename, _sdf, false, _errors);
+  return readStringWithoutConversion(
+      _filename, ParserConfig::GlobalConfig(), _sdf, _errors);
 }
 
 //////////////////////////////////////////////////
-bool readStringInternal(const std::string &_xmlString, SDFPtr _sdf,
-    const bool _convert, Errors &_errors)
+bool readStringWithoutConversion(const std::string &_filename,
+    const ParserConfig &_config, SDFPtr _sdf, Errors &_errors)
 {
-  tinyxml2::XMLDocument xmlDoc;
+  return readStringInternal(_filename, false, _config, _sdf, _errors);
+}
+
+//////////////////////////////////////////////////
+bool readStringInternal(const std::string &_xmlString, const bool _convert,
+    const ParserConfig &_config, SDFPtr _sdf, Errors &_errors)
+{
+  auto xmlDoc = makeSdfDoc();
   xmlDoc.Parse(_xmlString.c_str());
   if (xmlDoc.Error())
   {
     sdferr << "Error parsing XML from string: " << xmlDoc.ErrorStr() << '\n';
     return false;
   }
-  if (readDoc(&xmlDoc, _sdf, "data-string", _convert, _errors))
+  if (readDoc(&xmlDoc, _sdf, "data-string", _convert, _config, _errors))
   {
     return true;
   }
   else
   {
     URDF2SDF u2g;
-    tinyxml2::XMLDocument doc;
+    auto doc = makeSdfDoc();
     u2g.InitModelString(_xmlString, &doc);
 
-    if (sdf::readDoc(&doc, _sdf, "urdf string", _convert, _errors))
+    if (sdf::readDoc(&doc, _sdf, "urdf string", _convert, _config, _errors))
     {
       sdfdbg << "Parsing from urdf.\n";
       return true;
@@ -524,14 +615,21 @@ bool readString(const std::string &_xmlString, ElementPtr _sdf)
 //////////////////////////////////////////////////
 bool readString(const std::string &_xmlString, ElementPtr _sdf, Errors &_errors)
 {
-  tinyxml2::XMLDocument xmlDoc;
+  return readString(_xmlString, ParserConfig::GlobalConfig(), _sdf, _errors);
+}
+
+//////////////////////////////////////////////////
+bool readString(const std::string &_xmlString, const ParserConfig &_config,
+    ElementPtr _sdf, Errors &_errors)
+{
+  auto xmlDoc = makeSdfDoc();
   xmlDoc.Parse(_xmlString.c_str());
   if (xmlDoc.Error())
   {
     sdferr << "Error parsing XML from string: " << xmlDoc.ErrorStr() << '\n';
     return false;
   }
-  if (readDoc(&xmlDoc, _sdf, "data-string", true, _errors))
+  if (readDoc(&xmlDoc, _sdf, "data-string", true, _config, _errors))
   {
     return true;
   }
@@ -545,7 +643,8 @@ bool readString(const std::string &_xmlString, ElementPtr _sdf, Errors &_errors)
 
 //////////////////////////////////////////////////
 bool readDoc(tinyxml2::XMLDocument *_xmlDoc, SDFPtr _sdf,
-    const std::string &_source, bool _convert, Errors &_errors)
+    const std::string &_source, bool _convert, const ParserConfig &_config,
+    Errors &_errors)
 {
   if (!_xmlDoc)
   {
@@ -592,10 +691,22 @@ bool readDoc(tinyxml2::XMLDocument *_xmlDoc, SDFPtr _sdf,
 
     // parse new sdf xml
     auto *elemXml = _xmlDoc->FirstChildElement(_sdf->Root()->GetName().c_str());
-    if (!readXml(elemXml, _sdf->Root(), _errors))
+    if (!readXml(elemXml, _sdf->Root(), _config, _source, _errors))
     {
       _errors.push_back({ErrorCode::ELEMENT_INVALID,
           "Error reading element <" + _sdf->Root()->GetName() + ">"});
+      return false;
+    }
+
+    // delimiter '::' in element names not allowed in SDFormat >= 1.8
+    ignition::math::SemanticVersion sdfVersion(_sdf->Root()->OriginalVersion());
+    if (sdfVersion >= ignition::math::SemanticVersion(1, 8)
+        && !recursiveSiblingNoDoubleColonInNames(_sdf->Root()))
+    {
+      _errors.push_back({ErrorCode::RESERVED_NAME,
+          "Delimiter '::' found in attribute names of element <"
+          + _sdf->Root()->GetName() +
+          ">, which is not allowed in SDFormat >= 1.8"});
       return false;
     }
   }
@@ -618,7 +729,8 @@ bool readDoc(tinyxml2::XMLDocument *_xmlDoc, SDFPtr _sdf,
 
 //////////////////////////////////////////////////
 bool readDoc(tinyxml2::XMLDocument *_xmlDoc, ElementPtr _sdf,
-             const std::string &_source, bool _convert, Errors &_errors)
+    const std::string &_source, bool _convert, const ParserConfig &_config,
+    Errors &_errors)
 {
   if (!_xmlDoc)
   {
@@ -648,7 +760,8 @@ bool readDoc(tinyxml2::XMLDocument *_xmlDoc, ElementPtr _sdf,
     if (_convert
         && strcmp(sdfNode->Attribute("version"), SDF::Version().c_str()) != 0)
     {
-      sdfwarn << "Converting a deprecated SDF source[" << _source << "].\n";
+      sdfdbg << "Converting a deprecated SDF source[" << _source << "].\n";
+
       Converter::Convert(_xmlDoc, SDF::Version());
     }
 
@@ -660,10 +773,22 @@ bool readDoc(tinyxml2::XMLDocument *_xmlDoc, ElementPtr _sdf,
     }
 
     // parse new sdf xml
-    if (!readXml(elemXml, _sdf, _errors))
+    if (!readXml(elemXml, _sdf, _config, _source, _errors))
     {
       _errors.push_back({ErrorCode::ELEMENT_INVALID,
           "Unable to parse sdf element["+ _sdf->GetName() + "]"});
+      return false;
+    }
+
+    // delimiter '::' in element names not allowed in SDFormat >= 1.8
+    ignition::math::SemanticVersion sdfVersion(_sdf->OriginalVersion());
+    if (sdfVersion >= ignition::math::SemanticVersion(1, 8)
+        && !recursiveSiblingNoDoubleColonInNames(_sdf))
+    {
+      _errors.push_back({ErrorCode::RESERVED_NAME,
+          "Delimiter '::' found in attribute names of element <"
+          + _sdf->GetName() +
+          ">, which is not allowed in SDFormat >= 1.8"});
       return false;
     }
   }
@@ -761,7 +886,8 @@ std::string getModelFilePath(const std::string &_modelDirPath)
     if (!sdf::filesystem::exists(configFilePath))
     {
       // We didn't find manifest.xml either, output an error and get out.
-      sdferr << "Could not find model.config or manifest.xml for the model\n";
+      sdferr << "Could not find model.config or manifest.xml in ["
+             << _modelDirPath << "]\n";
       return std::string();
     }
     else
@@ -773,7 +899,7 @@ std::string getModelFilePath(const std::string &_modelDirPath)
     }
   }
 
-  tinyxml2::XMLDocument configFileDoc;
+  auto configFileDoc = makeSdfDoc();
   if (tinyxml2::XML_SUCCESS != configFileDoc.LoadFile(configFilePath.c_str()))
   {
     sdferr << "Error parsing XML in file ["
@@ -800,20 +926,28 @@ std::string getModelFilePath(const std::string &_modelDirPath)
 }
 
 //////////////////////////////////////////////////
-bool readXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf, Errors &_errors)
+bool readXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf,
+    const ParserConfig &_config, const std::string &_source, Errors &_errors)
 {
   // Check if the element pointer is deprecated.
   if (_sdf->GetRequired() == "-1")
   {
-    sdfwarn << "SDF Element[" + _sdf->GetName() + "] is deprecated\n";
+    std::stringstream ss;
+    ss << "SDF Element[" + _sdf->GetName() + "] is deprecated\n";
+    enforceConfigurablePolicyCondition(
+        _config.WarningsPolicy(),
+        Error(ErrorCode::ELEMENT_DEPRECATED, ss.str()),
+        _errors);
   }
 
   if (!_xml)
   {
     if (_sdf->GetRequired() == "1" || _sdf->GetRequired() =="+")
     {
-      _errors.push_back({ErrorCode::ELEMENT_MISSING,
-          "SDF Element<" + _sdf->GetName() + "> is missing"});
+      _errors.push_back({
+          ErrorCode::ELEMENT_MISSING,
+          "SDF Element<" + _sdf->GetName() + "> is missing",
+          _source});
       return false;
     }
     else
@@ -858,12 +992,12 @@ bool readXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf, Errors &_errors)
 
   unsigned int i = 0;
 
-  // Iterate over all the attributes defined in the give XML element
+  // Iterate over all the attributes defined in the given XML element
   while (attribute)
   {
     // Avoid printing a warning message for missing attributes if a namespaced
     // attribute is found
-    if (std::strchr(attribute->Name(), ':') != NULL)
+    if (std::strchr(attribute->Name(), ':') != nullptr)
     {
       _sdf->AddAttribute(attribute->Name(), "string", "", 1, "");
       _sdf->GetAttribute(attribute->Name())->SetFromString(
@@ -882,18 +1016,23 @@ bool readXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf, Errors &_errors)
         {
           if (!isValidFrameReference(attribute->Value()))
           {
-            _errors.push_back({ErrorCode::ATTRIBUTE_INVALID,
+            _errors.push_back({
+                ErrorCode::ATTRIBUTE_INVALID,
                 "'" + std::string(attribute->Value()) +
-                    "' is reserved; it cannot be used as a value of "
-                    "attribute [" +
-                    p->GetKey() + "]"});
+                "' is reserved; it cannot be used as a value of "
+                "attribute [" + p->GetKey() + "]",
+                _source,
+                attribute->GetLineNum()});
             }
         }
         // Set the value of the SDF attribute
         if (!p->SetFromString(attribute->Value()))
         {
-          _errors.push_back({ErrorCode::ATTRIBUTE_INVALID,
-              "Unable to read attribute[" + p->GetKey() + "]"});
+          _errors.push_back({
+              ErrorCode::ATTRIBUTE_INVALID,
+              "Unable to read attribute[" + p->GetKey() + "]",
+              _source,
+              attribute->GetLineNum()});
           return false;
         }
         break;
@@ -902,9 +1041,18 @@ bool readXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf, Errors &_errors)
 
     if (i == _sdf->GetAttributeCount())
     {
-      sdfwarn << "XML Attribute[" << attribute->Name()
+      std::stringstream ss;
+      ss << "XML Attribute[" << attribute->Name()
               << "] in element[" << _xml->Value()
-              << "] not defined in SDF, ignoring.\n";
+              << "] not defined in SDF.\n";
+      enforceConfigurablePolicyCondition(
+          _config.WarningsPolicy(),
+          Error(
+              ErrorCode::ATTRIBUTE_INCORRECT_TYPE,
+              ss.str(),
+              _source,
+              _xml->GetLineNum()),
+          _errors);
     }
 
     attribute = attribute->Next();
@@ -916,9 +1064,12 @@ bool readXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf, Errors &_errors)
     ParamPtr p = _sdf->GetAttribute(i);
     if (p->GetRequired() && !p->GetSet())
     {
-      _errors.push_back({ErrorCode::ATTRIBUTE_MISSING,
+      _errors.push_back({
+          ErrorCode::ATTRIBUTE_MISSING,
           "Required attribute[" + p->GetKey() + "] in element[" + _xml->Value()
-          + "] is not specified in SDF."});
+          + "] is not specified in SDF.",
+          _source,
+          _xml->GetLineNum()});
       return false;
     }
   }
@@ -939,201 +1090,264 @@ bool readXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf, Errors &_errors)
       if (std::string("include") == elemXml->Value())
       {
         std::string modelPath;
+        std::string uri;
+        tinyxml2::XMLElement *uriElement = elemXml->FirstChildElement("uri");
 
-        if (elemXml->FirstChildElement("uri"))
+        if (uriElement)
         {
-          std::string uri = elemXml->FirstChildElement("uri")->GetText();
-          modelPath = sdf::findFile(uri, true, true);
+          uri = uriElement->GetText();
+          modelPath = sdf::findFile(uri, true, true, _config);
 
           // Test the model path
           if (modelPath.empty())
           {
-            _errors.push_back({ErrorCode::URI_LOOKUP,
-                "Unable to find uri[" + uri + "]"});
-
-            size_t modelFound = uri.find("model://");
-            if (modelFound != 0u)
-            {
-              _errors.push_back({ErrorCode::URI_INVALID,
-                  "Invalid uri[" + uri + "]. Should be model://" + uri});
-            }
+            _errors.push_back({
+                ErrorCode::URI_LOOKUP,
+                "Unable to find uri[" + uri + "]",
+                _source,
+                uriElement->GetLineNum()});
             continue;
           }
           else
           {
-            if (!sdf::filesystem::is_directory(modelPath))
+            if (sdf::filesystem::is_directory(modelPath))
             {
-              _errors.push_back({ErrorCode::DIRECTORY_NONEXISTANT,
-                  "Directory doesn't exist[" + modelPath + "]"});
-              continue;
-            }
-          }
+              // Get the model.config filename
+              filename = getModelFilePath(modelPath);
 
-          // Get the config.xml filename
-          filename = getModelFilePath(modelPath);
-        }
-        else
-        {
-          _errors.push_back({ErrorCode::ATTRIBUTE_MISSING,
-              "<include> element missing 'uri' attribute"});
-          continue;
-        }
-
-        // NOTE: sdf::init is an expensive call. For performance reason,
-        // a new sdf pointer is created here by cloning a fresh sdf template
-        // pointer instead of calling init every iteration.
-        // SDFPtr includeSDF(new SDF);
-        // init(includeSDF);
-        static SDFPtr includeSDFTemplate;
-        if (!includeSDFTemplate)
-        {
-          includeSDFTemplate.reset(new SDF);
-          init(includeSDFTemplate);
-        }
-        SDFPtr includeSDF(new SDF);
-        includeSDF->Root(includeSDFTemplate->Root()->Clone());
-
-        if (!readFile(filename, includeSDF))
-        {
-          _errors.push_back({ErrorCode::FILE_READ,
-              "Unable to read file[" + filename + "]"});
-          return false;
-        }
-
-        // For now there is only a warning if there is more than one model,
-        // actor or light element, or two different types of those elements. For
-        // compatibility with old behavior, this chooses the first element
-        // in the preference order: model->actor->light
-        sdf::ElementPtr topLevelElem;
-        for (const auto & elementType : {"model", "actor", "light"})
-        {
-          if (includeSDF->Root()->HasElement(elementType))
-          {
-            if (nullptr == topLevelElem)
-            {
-              topLevelElem = includeSDF->Root()->GetElement(elementType);
+              if (filename.empty())
+              {
+                _errors.push_back({
+                    ErrorCode::URI_LOOKUP,
+                    "Unable to resolve uri[" + uri + "] to model path [" +
+                    modelPath + "] since it does not contain a model.config " +
+                    "file.",
+                    _source,
+                    uriElement->GetLineNum()});
+                continue;
+              }
             }
             else
             {
-              sdfwarn << "Found other top level element <" << elementType
-                      << "> in addition to <" << topLevelElem->GetName()
-                      << "> in include file. This is unsupported and in future "
-                      << "versions of libsdformat will become an error";
+              // This is a file path and since sdf::findFile returns an empty
+              // string if the file doesn't exist, we don't have to check for
+              // existence again here.
+              filename = modelPath;
             }
           }
         }
-
-        if (nullptr == topLevelElem)
+        else
         {
-          _errors.push_back({ErrorCode::ELEMENT_MISSING,
-              "Failed to find top level <model> / <actor> / <light> for "
-              "<include>\n"});
+          _errors.push_back({
+              ErrorCode::ATTRIBUTE_MISSING,
+              "<include> element missing 'uri' attribute",
+              _source,
+              elemXml->GetLineNum()});
           continue;
         }
 
-        const auto topLevelElementType = topLevelElem->GetName();
-        // Check for more than one of the discovered top-level element type
-        if (nullptr != topLevelElem->GetNextElement(topLevelElementType))
+        // If the file is not an SDFormat file, it is assumed that it will
+        // handled by a custom parser, so fall through and add the include
+        // element into _sdf.
+        if (sdf::isSdfFile(filename))
         {
-          sdfwarn << "Found more than one of " << topLevelElem->GetName()
-                  << " for <include>. This is unsupported and in future "
-                  << "versions of libsdformat will become an error";
-        }
-
-        bool isModel = topLevelElementType == "model";
-        bool isActor = topLevelElementType == "actor";
-
-        if (elemXml->FirstChildElement("name"))
-        {
-          topLevelElem->GetAttribute("name")->SetFromString(
-                elemXml->FirstChildElement("name")->GetText());
-        }
-
-        tinyxml2::XMLElement *poseElemXml = elemXml->FirstChildElement("pose");
-        if (poseElemXml)
-        {
-          sdf::ElementPtr poseElem = topLevelElem->GetElement("pose");
-
-          if (poseElemXml->GetText())
+          // NOTE: sdf::init is an expensive call. For performance reason,
+          // a new sdf pointer is created here by cloning a fresh sdf template
+          // pointer instead of calling init every iteration.
+          // SDFPtr includeSDF(new SDF);
+          // init(includeSDF);
+          static SDFPtr includeSDFTemplate;
+          if (!includeSDFTemplate)
           {
-            poseElem->GetValue()->SetFromString(poseElemXml->GetText());
+            includeSDFTemplate.reset(new SDF);
+            init(includeSDFTemplate);
           }
-          else
-          {
-            poseElem->GetValue()->Reset();
-          }
+          SDFPtr includeSDF(new SDF);
+          includeSDF->Root(includeSDFTemplate->Root()->Clone());
 
-          const char *relativeTo = poseElemXml->Attribute("relative_to");
-          if (relativeTo)
+          if (!readFile(filename, includeSDF))
           {
-            poseElem->GetAttribute("relative_to")->SetFromString(relativeTo);
-          }
-          else
-          {
-            poseElem->GetAttribute("relative_to")->Reset();
-          }
-        }
-
-        if (isModel && elemXml->FirstChildElement("static"))
-        {
-          topLevelElem->GetElement("static")->GetValue()->SetFromString(
-                elemXml->FirstChildElement("static")->GetText());
-        }
-
-        if (isModel && elemXml->FirstChildElement("placement_frame"))
-        {
-          if (nullptr == elemXml->FirstChildElement("pose"))
-          {
-            _errors.push_back({ErrorCode::MODEL_PLACEMENT_FRAME_INVALID,
-                "<pose> is required when specifying the placement_frame "
-                "element"});
+            _errors.push_back({
+                ErrorCode::FILE_READ,
+                "Unable to read file[" + filename + "]",
+                _source,
+                uriElement->GetLineNum()});
             return false;
           }
 
-          const std::string placementFrameVal =
-              elemXml->FirstChildElement("placement_frame")->GetText();
-
-          if (!isValidFrameReference(placementFrameVal))
+          // For now there is only a warning if there is more than one model,
+          // actor or light element, or two different types of those elements.
+          // For compatibility with old behavior, this chooses the first element
+          // in the preference order: model->actor->light
+          sdf::ElementPtr topLevelElem;
+          for (const auto &elementType : {"model", "actor", "light"})
           {
-            _errors.push_back({ErrorCode::RESERVED_NAME,
-                "'" + placementFrameVal +
-                    "' is reserved; it cannot be used as a value of "
-                    "element [placement_frame]"});
-          }
-          topLevelElem->GetAttribute("placement_frame")
-              ->SetFromString(placementFrameVal);
-        }
-
-        if (isModel || isActor)
-        {
-          for (auto *childElemXml = elemXml->FirstChildElement();
-               childElemXml; childElemXml = childElemXml->NextSiblingElement())
-          {
-            if (std::string("plugin") == childElemXml->Value())
+            if (includeSDF->Root()->HasElement(elementType))
             {
-              sdf::ElementPtr pluginElem;
-              pluginElem = topLevelElem->AddElement("plugin");
-
-              if (!readXml(childElemXml, pluginElem, _errors))
+              if (nullptr == topLevelElem)
               {
-                _errors.push_back({ErrorCode::ELEMENT_INVALID,
-                                   "Error reading plugin element"});
-                return false;
+                topLevelElem = includeSDF->Root()->GetElement(elementType);
+              }
+              else
+              {
+                std::stringstream ss;
+                ss << "Found other top level element <" << elementType
+                  << "> in addition to <" << topLevelElem->GetName()
+                  << "> in include file. This is unsupported and in future "
+                  << "versions of libsdformat will become an error";
+                enforceConfigurablePolicyCondition(
+                    _config.WarningsPolicy(),
+                    Error(
+                        ErrorCode::ELEMENT_INCORRECT_TYPE,
+                        ss.str(),
+                        filename),
+                    _errors);
               }
             }
           }
+
+          if (nullptr == topLevelElem)
+          {
+            _errors.push_back({
+                ErrorCode::ELEMENT_MISSING,
+                "Failed to find top level <model> / <actor> / <light> for "
+                "<include>\n",
+                _source,
+                uriElement->GetLineNum()});
+            continue;
+          }
+
+          const auto topLevelElementType = topLevelElem->GetName();
+          // Check for more than one of the discovered top-level element type
+          auto nextTopLevelElem =
+              topLevelElem->GetNextElement(topLevelElementType);
+          if (nullptr != nextTopLevelElem)
+          {
+            std::stringstream ss;
+            ss << "Found more than one of " << topLevelElem->GetName()
+              << " for <include>. This is unsupported and in future "
+              << "versions of libsdformat will become an error";
+            enforceConfigurablePolicyCondition(
+                _config.WarningsPolicy(),
+                Error(
+                    ErrorCode::ELEMENT_INCORRECT_TYPE,
+                    ss.str(),
+                    filename),
+                _errors);
+          }
+
+          bool isModel = topLevelElementType == "model";
+          bool isActor = topLevelElementType == "actor";
+
+          if (elemXml->FirstChildElement("name"))
+          {
+            topLevelElem->GetAttribute("name")->SetFromString(
+                elemXml->FirstChildElement("name")->GetText());
+          }
+
+          tinyxml2::XMLElement *poseElemXml =
+              elemXml->FirstChildElement("pose");
+          if (poseElemXml)
+          {
+            sdf::ElementPtr poseElem = topLevelElem->GetElement("pose");
+
+            if (poseElemXml->GetText())
+            {
+              poseElem->GetValue()->SetFromString(poseElemXml->GetText());
+            }
+            else
+            {
+              poseElem->GetValue()->Reset();
+            }
+
+            const char *relativeTo = poseElemXml->Attribute("relative_to");
+            if (relativeTo)
+            {
+              poseElem->GetAttribute("relative_to")->SetFromString(relativeTo);
+            }
+            else
+            {
+              poseElem->GetAttribute("relative_to")->Reset();
+            }
+          }
+
+          if (isModel && elemXml->FirstChildElement("static"))
+          {
+            topLevelElem->GetElement("static")->GetValue()->SetFromString(
+                elemXml->FirstChildElement("static")->GetText());
+          }
+
+          auto *placementFrameElem =
+              elemXml->FirstChildElement("placement_frame");
+          if (isModel && placementFrameElem)
+          {
+            if (nullptr == elemXml->FirstChildElement("pose"))
+            {
+              _errors.push_back({
+                  ErrorCode::MODEL_PLACEMENT_FRAME_INVALID,
+                  "<pose> is required when specifying the placement_frame "
+                  "element",
+                  _source,
+                  elemXml->GetLineNum()});
+              return false;
+            }
+
+            const std::string placementFrameVal = placementFrameElem->GetText();
+
+            if (!isValidFrameReference(placementFrameVal))
+            {
+              _errors.push_back({
+                  ErrorCode::RESERVED_NAME,
+                  "'" + placementFrameVal +
+                  "' is reserved; it cannot be used as a value of "
+                  "element [placement_frame]",
+                  _source,
+                  placementFrameElem->GetLineNum()});
+            }
+            topLevelElem->GetAttribute("placement_frame")
+                ->SetFromString(placementFrameVal);
+          }
+
+          if (isModel || isActor)
+          {
+            for (auto *childElemXml = elemXml->FirstChildElement();
+                 childElemXml;
+                 childElemXml = childElemXml->NextSiblingElement())
+            {
+              if (std::string("plugin") == childElemXml->Value())
+              {
+                sdf::ElementPtr pluginElem;
+                pluginElem = topLevelElem->AddElement("plugin");
+
+                if (!readXml(
+                    childElemXml, pluginElem, _config, _source, _errors))
+                {
+                  _errors.push_back({
+                      ErrorCode::ELEMENT_INVALID,
+                      "Error reading plugin element",
+                      _source,
+                      childElemXml->GetLineNum()});
+                  return false;
+                }
+              }
+            }
+          }
+
+          auto includeSDFFirstElem = includeSDF->Root()->GetFirstElement();
+          includeSDFFirstElem->SetParent(_sdf);
+          auto includeDesc = _sdf->GetElementDescription("include");
+          if (includeDesc)
+          {
+            // Store the contents of the <include> tag as the includeElement of
+            // the entity that was loaded from the included URI.
+            auto includeInfo = includeDesc->Clone();
+            copyChildren(includeInfo, elemXml, false);
+            includeSDFFirstElem->SetIncludeElement(includeInfo);
+          }
+          _sdf->InsertElement(includeSDFFirstElem);
+
+          continue;
         }
-
-        includeSDF->Root()->GetFirstElement()->SetParent(_sdf);
-        _sdf->InsertElement(includeSDF->Root()->GetFirstElement());
-        // TODO: This was used to store the included filename so that when
-        // a world is saved, the included model's SDF is not stored in the
-        // world file. This highlights the need to make model inclusion
-        // a core feature of SDF, and not a hack that that parser handles
-        // includeSDF->Root()->GetFirstElement()->SetInclude(
-        // elemXml->Attribute("filename"));
-
-        continue;
       }
 
       // Find the matching element in SDF
@@ -1146,27 +1360,42 @@ bool readXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf, Errors &_errors)
         {
           ElementPtr element = elemDesc->Clone();
           element->SetParent(_sdf);
-          if (readXml(elemXml, element, _errors))
+          if (readXml(elemXml, element, _config, _source, _errors))
           {
             _sdf->InsertElement(element);
           }
           else
           {
-            _errors.push_back({ErrorCode::ELEMENT_INVALID,
+            _errors.push_back({
+                ErrorCode::ELEMENT_INVALID,
                 std::string("Error reading element <") +
-                elemXml->Value() + ">"});
+                elemXml->Value() + ">",
+                _source,
+                elemXml->GetLineNum()});
             return false;
           }
           break;
         }
       }
 
-      if (descCounter == _sdf->GetElementDescriptionCount())
+      if (descCounter == _sdf->GetElementDescriptionCount()
+            && std::strchr(elemXml->Value(), ':') == nullptr)
       {
-        sdfdbg << "XML Element[" << elemXml->Value()
-               << "], child of element[" << _xml->Value()
-               << "], not defined in SDF. Copying[" << elemXml->Value() << "] "
-               << "as children of [" << _xml->Value() << "].\n";
+        std::stringstream ss;
+        ss << "XML Element[" << elemXml->Value()
+           << "], child of element[" << _xml->Value()
+           << "], not defined in SDF. Copying[" << elemXml->Value() << "] "
+           << "as children of [" << _xml->Value() << "].\n";
+
+        enforceConfigurablePolicyCondition(
+            _config.UnrecognizedElementsPolicy(),
+            Error(
+                ErrorCode::ELEMENT_INCORRECT_TYPE,
+                ss.str(),
+                _source,
+                elemXml->GetLineNum()),
+            _errors);
+
         continue;
       }
     }
@@ -1187,9 +1416,12 @@ bool readXml(tinyxml2::XMLElement *_xml, ElementPtr _sdf, Errors &_errors)
           if (_sdf->GetName() == "joint" &&
               _sdf->Get<std::string>("type") != "ball")
           {
-            _errors.push_back({ErrorCode::ELEMENT_MISSING,
+            _errors.push_back({
+                ErrorCode::ELEMENT_MISSING,
                 "XML Missing required element[" + elemDesc->GetName() +
-                "], child of element[" + _sdf->GetName() + "]"});
+                "], child of element[" + _sdf->GetName() + "]",
+                _source,
+                elemXml->GetLineNum()});
             return false;
           }
           else
@@ -1232,8 +1464,8 @@ void copyChildren(ElementPtr _sdf,
         }
 
         // copy value
-        std::string value = elemXml->GetText();
-        if (!value.empty())
+        const char *value = elemXml->GetText();
+        if (value)
         {
           element->GetValue()->SetFromString(value);
         }
@@ -1268,7 +1500,14 @@ void copyChildren(ElementPtr _sdf,
 bool convertFile(const std::string &_filename, const std::string &_version,
                  SDFPtr _sdf)
 {
-  std::string filename = sdf::findFile(_filename);
+  return convertFile(_filename, _version, ParserConfig::GlobalConfig(), _sdf);
+}
+
+/////////////////////////////////////////////////
+bool convertFile(const std::string &_filename, const std::string &_version,
+                 const ParserConfig &_config, SDFPtr _sdf)
+{
+  std::string filename = sdf::findFile(_filename, true, false, _config);
 
   if (filename.empty())
   {
@@ -1282,7 +1521,7 @@ bool convertFile(const std::string &_filename, const std::string &_version,
     return false;
   }
 
-  tinyxml2::XMLDocument xmlDoc;
+  auto xmlDoc = makeSdfDoc();
   if (!xmlDoc.LoadFile(filename.c_str()))
   {
     // read initial sdf version
@@ -1300,7 +1539,8 @@ bool convertFile(const std::string &_filename, const std::string &_version,
     if (sdf::Converter::Convert(&xmlDoc, _version, true))
     {
       Errors errors;
-      bool result = sdf::readDoc(&xmlDoc, _sdf, filename, false, errors);
+      bool result =
+          sdf::readDoc(&xmlDoc, _sdf, filename, false, _config, errors);
 
       // Output errors
       for (auto const &e : errors)
@@ -1320,6 +1560,14 @@ bool convertFile(const std::string &_filename, const std::string &_version,
 /////////////////////////////////////////////////
 bool convertString(const std::string &_sdfString, const std::string &_version,
                    SDFPtr _sdf)
+{
+  return convertString(
+      _sdfString, _version, ParserConfig::GlobalConfig(), _sdf);
+}
+
+/////////////////////////////////////////////////
+bool convertString(const std::string &_sdfString, const std::string &_version,
+    const ParserConfig &_config, SDFPtr _sdf)
 {
   if (_sdfString.empty())
   {
@@ -1347,7 +1595,8 @@ bool convertString(const std::string &_sdfString, const std::string &_version,
     if (sdf::Converter::Convert(&xmlDoc, _version, true))
     {
       Errors errors;
-      bool result = sdf::readDoc(&xmlDoc, _sdf, "data-string", false, errors);
+      bool result =
+          sdf::readDoc(&xmlDoc, _sdf, "data-string", false, _config, errors);
 
       // Output errors
       for (auto const &e : errors)
@@ -1393,10 +1642,9 @@ bool checkCanonicalLinkNames(const sdf::Root *_root)
     return modelResult;
   };
 
-  for (uint64_t m = 0; m < _root->ModelCount(); ++m)
+  if (_root->Model())
   {
-    auto model = _root->ModelByIndex(m);
-    result = checkModelCanonicalLinkName(model) && result;
+    result = checkModelCanonicalLinkName(_root->Model()) && result;
   }
 
   for (uint64_t w = 0; w < _root->WorldCount(); ++w)
@@ -1530,10 +1778,9 @@ bool checkFrameAttachedToNames(const sdf::Root *_root)
     return worldResult;
   };
 
-  for (uint64_t m = 0; m < _root->ModelCount(); ++m)
+  if (_root->Model())
   {
-    auto model = _root->ModelByIndex(m);
-    result = checkModelFrameAttachedToNames(model) && result;
+    result = checkModelFrameAttachedToNames(_root->Model()) && result;
   }
 
   for (uint64_t w = 0; w < _root->WorldCount(); ++w)
@@ -1606,6 +1853,32 @@ bool recursiveSiblingUniqueNames(sdf::ElementPtr _elem)
 }
 
 //////////////////////////////////////////////////
+bool recursiveSiblingNoDoubleColonInNames(sdf::ElementPtr _elem)
+{
+  if (!shouldValidateElement(_elem))
+    return true;
+
+  bool result = true;
+  if (_elem->HasAttribute("name")
+      && _elem->Get<std::string>("name").find("::") != std::string::npos)
+  {
+    std::cerr << "Error: Detected delimiter '::' in element name in\n"
+             << _elem->ToString("")
+             << std::endl;
+    result = false;
+  }
+
+  sdf::ElementPtr child = _elem->GetFirstElement();
+  while (child)
+  {
+    result = recursiveSiblingNoDoubleColonInNames(child) && result;
+    child = child->GetNextElement();
+  }
+
+  return result;
+}
+
+//////////////////////////////////////////////////
 bool checkFrameAttachedToGraph(const sdf::Root *_root)
 {
   bool result = true;
@@ -1668,10 +1941,9 @@ bool checkFrameAttachedToGraph(const sdf::Root *_root)
     return worldResult;
   };
 
-  for (uint64_t m = 0; m < _root->ModelCount(); ++m)
+  if (_root->Model())
   {
-    auto model = _root->ModelByIndex(m);
-    result = checkModelFrameAttachedToGraph(model) && result;
+    result = checkModelFrameAttachedToGraph(_root->Model()) && result;
   }
 
   for (uint64_t w = 0; w < _root->WorldCount(); ++w)
@@ -1751,10 +2023,9 @@ bool checkPoseRelativeToGraph(const sdf::Root *_root)
     return worldResult;
   };
 
-  for (uint64_t m = 0; m < _root->ModelCount(); ++m)
+  if (_root->Model())
   {
-    auto model = _root->ModelByIndex(m);
-    result = checkModelPoseRelativeToGraph(model) && result;
+    result = checkModelPoseRelativeToGraph(_root->Model()) && result;
   }
 
   for (uint64_t w = 0; w < _root->WorldCount(); ++w)
@@ -1879,10 +2150,9 @@ bool checkJointParentChildLinkNames(const sdf::Root *_root)
     return modelResult;
   };
 
-  for (uint64_t m = 0; m < _root->ModelCount(); ++m)
+  if (_root->Model())
   {
-    auto model = _root->ModelByIndex(m);
-    result = checkModelJointParentChildNames(model) && result;
+    result = checkModelJointParentChildNames(_root->Model()) && result;
   }
 
   for (uint64_t w = 0; w < _root->WorldCount(); ++w)

@@ -20,6 +20,7 @@
 #include <memory>
 #include <string>
 #include <ignition/math/Pose3.hh>
+#include <ignition/utils/ImplPtr.hh>
 #include "sdf/Box.hh"
 #include "sdf/Cylinder.hh"
 #include "sdf/Element.hh"
@@ -38,7 +39,6 @@ namespace sdf
   //
 
   // Forward declarations.
-  class VisualPrivate;
   class Geometry;
   struct PoseRelativeToGraph;
   template <typename T> class ScopedGraph;
@@ -47,27 +47,6 @@ namespace sdf
   {
     /// \brief Default constructor
     public: Visual();
-
-    /// \brief Copy constructor
-    /// \param[in] _visual Visual to copy.
-    public: Visual(const Visual &_visual);
-
-    /// \brief Move constructor
-    /// \param[in] _visual Visual to move.
-    public: Visual(Visual &&_visual) noexcept;
-
-    /// \brief Move assignment operator.
-    /// \param[in] _visual Visual to move.
-    /// \return Reference to this.
-    public: Visual &operator=(Visual &&_visual);
-
-    /// \brief Copy assignment operator.
-    /// \param[in] _visual Visual to copy.
-    /// \return Reference to this.
-    public: Visual &operator=(const Visual &_visual);
-
-    /// \brief Destructor
-    public: ~Visual();
 
     /// \brief Load the visual based on a element pointer. This is *not* the
     /// usual entry point. Typical usage of the SDF DOM is through the Root
@@ -85,7 +64,7 @@ namespace sdf
     /// \brief Set the name of the visual.
     /// The name of the visual must be unique within the scope of a Link.
     /// \param[in] _name Name of the visual.
-    public: void SetName(const std::string &_name) const;
+    public: void SetName(const std::string &_name);
 
     /// \brief Get whether the visual casts shadows
     /// \return True if the visual casts shadows, false otherwise
@@ -149,7 +128,7 @@ namespace sdf
     /// be a nullptr if material properties have not been set.
     /// \return Pointer to the visual's material properties. Nullptr
     /// indicates that material properties have not been set.
-    public: sdf::Material *Material() const;
+    public: const sdf::Material *Material() const;
 
     /// \brief Set the visual's material
     /// \param[in] _material The material of the visual object
@@ -162,6 +141,24 @@ namespace sdf
     /// \brief Set the visibility flags of a visual
     /// \param[in] _flags visibility flags
     public: void SetVisibilityFlags(uint32_t _flags);
+
+    /// \brief Set whether the lidar reflective intensity
+    /// has been specified.
+    /// \param[in] _laserRetro True if the lidar reflective intensity
+    /// has been set in the sdf.
+    public: void SetHasLaserRetro(bool _laserRetro);
+
+    /// \brief Get whether the lidar reflective intensity was set was set.
+    /// \return True if the lidar reflective intensity was set was set.
+    public: bool HasLaserRetro() const;
+
+    /// \brief Get the flidar reflective intensity.
+    /// \return The lidar reflective intensity.
+    public: double LaserRetro() const;
+
+    /// \brief Set the lidar reflective intensity.
+    /// \param[in] _laserRetro The lidar reflective intensity.
+    public: void SetLaserRetro(double _laserRetro);
 
     /// \brief Give the name of the xml parent of this object, to be used
     /// for resolving poses. This is private and is intended to be called by
@@ -182,7 +179,7 @@ namespace sdf
     friend class Link;
 
     /// \brief Private data pointer.
-    private: VisualPrivate *dataPtr = nullptr;
+    IGN_UTILS_IMPL_PTR(dataPtr)
   };
   }
 }

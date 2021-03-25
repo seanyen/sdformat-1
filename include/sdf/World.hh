@@ -19,6 +19,7 @@
 
 #include <string>
 #include <ignition/math/Vector3.hh>
+#include <ignition/utils/ImplPtr.hh>
 
 #include "sdf/Atmosphere.hh"
 #include "sdf/Element.hh"
@@ -37,10 +38,12 @@ namespace sdf
   // Forward declare private data class.
   class Actor;
   class Frame;
+  class InterfaceModel;
   class Light;
   class Model;
+  class ParserConfig;
   class Physics;
-  class WorldPrivate;
+  struct NestedInclude;
   struct PoseRelativeToGraph;
   struct FrameAttachedToGraph;
   template <typename T> class ScopedGraph;
@@ -50,27 +53,6 @@ namespace sdf
     /// \brief Default constructor
     public: World();
 
-    /// \brief Copy constructor
-    /// \param[in] _world World to copy.
-    public: World(const World &_world);
-
-    /// \brief Move constructor
-    /// \param[in] _world World to move.
-    public: World(World &&_world) noexcept;
-
-    /// \brief Move assignment operator.
-    /// \param[in] _world World to move.
-    /// \return Reference to this.
-    public: World &operator=(World &&_world);
-
-    /// \brief Copy assignment operator.
-    /// \param[in] _world World to copy.
-    /// \return Reference to this.
-    public: World &operator=(const World &_world);
-
-    /// \brief Destructor
-    public: ~World();
-
     /// \brief Load the world based on a element pointer. This is *not* the
     /// usual entry point. Typical usage of the SDF DOM is through the Root
     /// object.
@@ -79,13 +61,22 @@ namespace sdf
     /// an error code and message. An empty vector indicates no error.
     public: Errors Load(ElementPtr _sdf);
 
+    /// \brief Load the world based on a element pointer. This is *not* the
+    /// usual entry point. Typical usage of the SDF DOM is through the Root
+    /// object.
+    /// \param[in] _sdf The SDF Element pointer
+    /// \param[in] _config Custom parser configuration
+    /// \return Errors, which is a vector of Error objects. Each Error includes
+    /// an error code and message. An empty vector indicates no error.
+    public: Errors Load(sdf::ElementPtr _sdf, const ParserConfig &_config);
+
     /// \brief Get the name of the world.
     /// \return Name of the world.
     public: std::string Name() const;
 
     /// \brief Set the name of the world.
     /// \param[in] _name Name of the world.
-    public: void SetName(const std::string &_name) const;
+    public: void SetName(const std::string &_name);
 
     /// \brief Get the audio device name. The audio device can be used to
     /// playback audio files. A value of "default" or an empty string
@@ -141,23 +132,32 @@ namespace sdf
 
     /// \brief Get the number of models that are immediate (not nested) children
     /// of this World object.
+    /// \remark ModelByName() can find nested models that are not immediate
+    /// children of this World object.
     /// \return Number of models contained in this World object.
     public: uint64_t ModelCount() const;
 
-    /// \brief Get an immediate (not nested) child model based on an index.
-    /// \param[in] _index Index of the model. The index should be in the
-    /// range [0..ModelCount()).
+    /// \brief Get an immediate (not recursively nested) child model based on an
+    /// index.
+    /// \param[in] _index Index of the model. The index should be in the range
+    /// [0..ModelCount()).
     /// \return Pointer to the model. Nullptr if the index does not exist.
     /// \sa uint64_t ModelCount() const
     public: const Model *ModelByIndex(const uint64_t _index) const;
 
     /// \brief Get a model based on a name.
     /// \param[in] _name Name of the model.
-    /// \return Pointer to the model. Nullptr if the name does not exist.
+    /// To get a model nested in other models, prefix the model name
+    /// with the sequence of nested model names, delimited by "::".
+    /// \return Pointer to the model. Nullptr if a model with the given name
+    /// does not exist.
+    /// \sa bool ModelNameExists(const std::string &_name) const
     public: const Model *ModelByName(const std::string &_name) const;
 
     /// \brief Get whether a model name exists.
     /// \param[in] _name Name of the model to check.
+    /// To check for a model nested in other models, prefix the model name with
+    /// the sequence of nested models containing this model, delimited by "::".
     /// \return True if there exists a model with the given name.
     public: bool ModelNameExists(const std::string &_name) const;
 
@@ -179,6 +179,8 @@ namespace sdf
 
     /// \brief Get the number of explicit frames that are immediate (not nested)
     /// children of this World object.
+    /// \remark FrameByName() can find explicit frames that are not immediate
+    /// children of this World object.
     /// \return Number of explicit frames contained in this World object.
     public: uint64_t FrameCount() const;
 
@@ -193,12 +195,16 @@ namespace sdf
 
     /// \brief Get an explicit frame based on a name.
     /// \param[in] _name Name of the explicit frame.
+    /// To get a frame in a nested model, prefix the frame name with the
+    /// sequence of nested models containing this frame, delimited by "::".
     /// \return Pointer to the explicit frame. Nullptr if the name does not
     /// exist.
     public: const Frame *FrameByName(const std::string &_name) const;
 
     /// \brief Get whether an explicit frame name exists.
     /// \param[in] _name Name of the explicit frame to check.
+    /// To check for a frame in a nested model, prefix the frame name with
+    /// the sequence of nested models containing this frame, delimited by "::".
     /// \return True if there exists an explicit frame with the given name.
     public: bool FrameNameExists(const std::string &_name) const;
 
@@ -226,13 +232,13 @@ namespace sdf
 
     /// \brief Set the atmosphere model associated with this world.
     /// \param[in] _atmosphere The new atmosphere model for this world.
-    public: void SetAtmosphere(const sdf::Atmosphere &_atmosphere) const;
+    public: void SetAtmosphere(const sdf::Atmosphere &_atmosphere);
 
     /// \brief Get a pointer to the Gui associated with this
     /// world. A nullptr indicates that a Gui element has not been specified.
     /// \return Pointer to this world's Gui parameters. Nullptr inidicates
     /// that there are no Gui parameters.
-    public: sdf::Gui *Gui() const;
+    public: const sdf::Gui *Gui() const;
 
     /// \brief Set the Gui parameters associated with this world.
     /// \param[in] _gui The new Gui parameter for this world
@@ -275,6 +281,31 @@ namespace sdf
     /// \return True if there exists a physics profile with the given name.
     public: bool PhysicsNameExists(const std::string &_name) const;
 
+    /// \brief Get the number of nested interface models that are immediate (not
+    /// recursively nested) children of this World object.
+    /// \return Number of nested interface models contained in this World
+    /// object.
+    public: uint64_t InterfaceModelCount() const;
+
+    /// \brief Get an immediate (not recursively nested) child interface model
+    /// based on an index.
+    /// \param[in] _index Index of the nested interface model. The index should
+    /// be in the range [0..InterfaceModelCount()).
+    /// \return Pointer to the model. Nullptr if the index does not exist.
+    /// \sa uint64_t InterfaceModelCount() const
+    public: std::shared_ptr<const InterfaceModel> InterfaceModelByIndex(
+                const uint64_t _index) const;
+
+    /// \brief Get the nested include information of an immediate (not
+    /// recursively nested) child interface model based on an index.
+    /// \param[in] _index Index of the nested interface model. The index should
+    /// be in the range [0..InterfaceModelCount()).
+    /// \return Pointer to the nested include information. Nullptr if the index
+    /// does not exist.
+    /// \sa uint64_t InterfaceModelCount() const
+    public: const NestedInclude* InterfaceModelNestedIncludeByIndex(
+                const uint64_t _index) const;
+
     /// \brief Give the Scoped PoseRelativeToGraph to be passed on to child
     /// entities for resolving poses. This is private and is intended to be
     /// called by Root::Load.
@@ -294,7 +325,7 @@ namespace sdf
     friend class Root;
 
     /// \brief Private data pointer.
-    private: WorldPrivate *dataPtr = nullptr;
+    IGN_UTILS_IMPL_PTR(dataPtr)
   };
   }
 }

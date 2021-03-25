@@ -15,6 +15,7 @@ set(tests
   geometry_dom.cc
   include.cc
   includes.cc
+  interface_api.cc
   joint_axis_frame.cc
   joint_axis_dom.cc
   joint_dom.cc
@@ -24,16 +25,19 @@ set(tests
   locale_fix.cc
   locale_fix_cxx.cc
   material_pbr.cc
+  material.cc
   model_dom.cc
   model_versions.cc
   nested_model.cc
   nested_multiple_elements_error.cc
   parser_error_detection.cc
+  parser_config.cc
   plugin_attribute.cc
   plugin_bool.cc
   plugin_include.cc
   provide_feedback.cc
   root_dom.cc
+  scene_dom.cc
   sdf_basic.cc
   sdf_custom.cc
   surface_dom.cc
@@ -41,6 +45,7 @@ set(tests
   urdf_gazebo_extensions.cc
   urdf_joint_parameters.cc
   visual_dom.cc
+  whitespace.cc
   world_dom.cc
 )
 

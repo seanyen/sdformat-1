@@ -64,14 +64,13 @@ TEST(DOMVisual, NoName)
 TEST(DOMVisual, DoublePendulum)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "double_pendulum.sdf");
+    sdf::testing::TestFile("sdf", "double_pendulum.sdf");
 
   // Load the SDF file
   sdf::Root root;
   EXPECT_TRUE(root.Load(testFile).empty());
 
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_TRUE(model != nullptr);
 
   const sdf::Link *baseLink = model->LinkByIndex(0);
@@ -97,14 +96,13 @@ TEST(DOMVisual, DoublePendulum)
 TEST(DOMVisual, Material)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "material.sdf");
+    sdf::testing::TestFile("sdf", "material.sdf");
 
   // Load the SDF file
   sdf::Root root;
   EXPECT_TRUE(root.Load(testFile).empty());
 
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
 
   const sdf::Link *link = model->LinkByIndex(0);
@@ -120,6 +118,9 @@ TEST(DOMVisual, Material)
   EXPECT_EQ(ignition::math::Color(0.2f, 0.5f, 0.1f, 1.0f), mat->Diffuse());
   EXPECT_EQ(ignition::math::Color(0.7f, 0.3f, 0.5f, 0.9f), mat->Specular());
   EXPECT_EQ(ignition::math::Color(1.0f, 0.0f, 0.2f, 1.0f), mat->Emissive());
+  EXPECT_FALSE(mat->Lighting());
+  EXPECT_TRUE(mat->DoubleSided());
+  EXPECT_FLOAT_EQ(5.1f, mat->RenderOrder());
   EXPECT_EQ(sdf::ShaderType::VERTEX, mat->Shader());
   EXPECT_EQ("myuri", mat->ScriptUri());
   EXPECT_EQ("myname", mat->ScriptName());
@@ -144,8 +145,7 @@ TEST(DOMVisual, Material)
 TEST(DOMVisual, MaterialScriptNoUri)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "material_script_no_uri.sdf");
+    sdf::testing::TestFile("sdf", "material_script_no_uri.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -165,8 +165,7 @@ TEST(DOMVisual, MaterialScriptNoUri)
 TEST(DOMVisual, MaterialScriptNormalMapMissing)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "material_normal_map_missing.sdf");
+    sdf::testing::TestFile("sdf", "material_normal_map_missing.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -182,14 +181,13 @@ TEST(DOMVisual, MaterialScriptNormalMapMissing)
 TEST(DOMVisual, Transparency)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "shapes.sdf");
+    sdf::testing::TestFile("sdf", "shapes.sdf");
 
   // Load the SDF file
   sdf::Root root;
   EXPECT_TRUE(root.Load(testFile).empty());
 
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
 
   const sdf::Link *link = model->LinkByIndex(0);
@@ -201,12 +199,35 @@ TEST(DOMVisual, Transparency)
   EXPECT_FLOAT_EQ(0.22f, vis1->Transparency());
 }
 
+//////////////////////////////////////////////////
+TEST(DOMVisual, LaserRetro)
+{
+  const std::string testFile =
+    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
+        "shapes.sdf");
+
+  // Load the SDF file
+  sdf::Root root;
+  EXPECT_TRUE(root.Load(testFile).empty());
+
+  const sdf::Model *model = root.Model();
+  ASSERT_NE(nullptr, model);
+
+  const sdf::Link *link = model->LinkByIndex(0);
+  ASSERT_NE(nullptr, link);
+
+  const sdf::Visual *vis1 = link->VisualByName("sphere_vis_laser_retro");
+  ASSERT_NE(nullptr, vis1);
+
+  ASSERT_EQ(true, vis1->HasLaserRetro());
+  EXPECT_DOUBLE_EQ(1150, vis1->LaserRetro());
+}
+
 /////////////////////////////////////////////////
 TEST(DOMVisual, LoadModelFramesRelativeToJoint)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "model_frame_relative_to_joint.sdf");
+    sdf::testing::TestFile("sdf", "model_frame_relative_to_joint.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -215,7 +236,7 @@ TEST(DOMVisual, LoadModelFramesRelativeToJoint)
   using Pose = ignition::math::Pose3d;
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("model_frame_relative_to_joint", model->Name());
   EXPECT_EQ(2u, model->LinkCount());
@@ -399,14 +420,13 @@ TEST(DOMVisual, LoadModelFramesRelativeToJoint)
 TEST(DOMVisual, VisibilityFlags)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "shapes.sdf");
+    sdf::testing::TestFile("sdf", "shapes.sdf");
 
   // Load the SDF file
   sdf::Root root;
   EXPECT_TRUE(root.Load(testFile).empty());
 
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
 
   const sdf::Link *link = model->LinkByIndex(0);

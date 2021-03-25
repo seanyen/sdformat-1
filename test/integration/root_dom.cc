@@ -30,8 +30,7 @@
 TEST(DOMRoot, InvalidSDF)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "empty_invalid.sdf");
+    sdf::testing::TestFile("sdf", "empty_invalid.sdf");
 
   sdf::Root root;
   sdf::Errors errors = root.Load(testFile);
@@ -43,8 +42,7 @@ TEST(DOMRoot, InvalidSDF)
 TEST(DOMRoot, NoVersion)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "empty_noversion.sdf");
+    sdf::testing::TestFile("sdf", "empty_noversion.sdf");
 
   sdf::Root root;
   sdf::Errors errors = root.Load(testFile);
@@ -56,8 +54,7 @@ TEST(DOMRoot, NoVersion)
 TEST(DOMRoot, Load)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "empty.sdf");
+    sdf::testing::TestFile("sdf", "empty.sdf");
 
   sdf::Root root;
   EXPECT_EQ(0u, root.WorldCount());
@@ -80,12 +77,18 @@ TEST(DOMRoot, Load)
 TEST(DOMRoot, LoadMultipleModels)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "root_multiple_models.sdf");
+    sdf::testing::TestFile("sdf", "root_multiple_models.sdf");
 
   sdf::Root root;
   sdf::Errors errors = root.Load(testFile);
+
+  // Currently just warnings are issued in this case, eventually they may become
+  // errors. For now, only the first model is loaded.
   EXPECT_TRUE(errors.empty()) << errors;
+  ASSERT_NE(nullptr, root.Model());
+  EXPECT_EQ("robot1", root.Model()->Name());
+
+  SDF_SUPPRESS_DEPRECATED_BEGIN
   EXPECT_EQ(3u, root.ModelCount());
 
   EXPECT_EQ("robot1", root.ModelByIndex(0)->Name());
@@ -96,18 +99,23 @@ TEST(DOMRoot, LoadMultipleModels)
   EXPECT_TRUE(root.ModelNameExists("robot1"));
   EXPECT_TRUE(root.ModelNameExists("robot2"));
   EXPECT_TRUE(root.ModelNameExists("last_robot"));
+  SDF_SUPPRESS_DEPRECATED_END
 }
 
 /////////////////////////////////////////////////
 TEST(DOMRoot, LoadDuplicateModels)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "root_duplicate_models.sdf");
+    sdf::testing::TestFile("sdf", "root_duplicate_models.sdf");
 
   sdf::Root root;
   sdf::Errors errors = root.Load(testFile);
   EXPECT_FALSE(errors.empty());
+  EXPECT_NE(nullptr, root.Model());
+  EXPECT_EQ("robot1", root.Model()->Name());
+
+  SDF_SUPPRESS_DEPRECATED_BEGIN
   EXPECT_EQ(1u, root.ModelCount());
   EXPECT_EQ("robot1", root.ModelByIndex(0)->Name());
+  SDF_SUPPRESS_DEPRECATED_END
 }

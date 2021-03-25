@@ -63,8 +63,7 @@ TEST(DOMModel, NoName)
 TEST(DOMModel, NoLinks)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "model_without_links.sdf");
+    sdf::testing::TestFile("sdf", "model_without_links.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -84,8 +83,7 @@ TEST(DOMModel, NoLinks)
 TEST(DOMRoot, LoadLinkCheck)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "empty.sdf");
+    sdf::testing::TestFile("sdf", "empty.sdf");
 
   // Load the SDF file
   sdf::Root root;
@@ -113,15 +111,14 @@ TEST(DOMRoot, LoadLinkCheck)
 TEST(DOMRoot, LoadDoublePendulum)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "double_pendulum.sdf");
+    sdf::testing::TestFile("sdf", "double_pendulum.sdf");
 
   // Load the SDF file
   sdf::Root root;
   EXPECT_TRUE(root.Load(testFile).empty());
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("double_pendulum_with_base", model->Name());
   EXPECT_EQ(3u, model->LinkCount());
@@ -149,18 +146,15 @@ TEST(DOMRoot, LoadDoublePendulum)
 TEST(DOMRoot, NestedModel)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "nested_model.sdf");
+    sdf::testing::TestFile("sdf", "nested_model.sdf");
 
   // Load the SDF file
   sdf::Root root;
   auto errors = root.Load(testFile);
   EXPECT_TRUE(errors.empty()) << errors;
 
-  EXPECT_EQ(1u, root.ModelCount());
-
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("top_level_model", model->Name());
   EXPECT_EQ(2u, model->LinkCount());
@@ -202,6 +196,18 @@ TEST(DOMRoot, NestedModel)
   EXPECT_TRUE(model->LinkNameExists(linkNestedName));
   const sdf::Link *nestedLink01 = model->LinkByName(linkNestedName);
   EXPECT_NE(nullptr, nestedLink01);
+
+  // Recursively nested
+  EXPECT_EQ(nullptr, model->ModelByName("nested_nested_model"));
+  EXPECT_FALSE(model->ModelNameExists("nested_nested_model"));
+
+  EXPECT_TRUE(model->ModelNameExists("nested_model::nested_nested_model"));
+  const sdf::Model *nested_nested_model =
+      model->ModelByName("nested_model::nested_nested_model");
+  ASSERT_NE(nullptr, nested_nested_model);
+  const sdf::Link *nested_nested_link =
+      nested_nested_model->LinkByName("nested_nested_link01");
+  EXPECT_NE(nullptr, nested_nested_link);
 }
 
 /////////////////////////////////////////////////
@@ -216,10 +222,8 @@ TEST(DOMRoot, MultiNestedModel)
   auto errors = root.Load(testFile);
   EXPECT_TRUE(errors.empty());
 
-  EXPECT_EQ(1u, root.ModelCount());
-
   // Get the outer model
-  const sdf::Model *outerModel = root.ModelByIndex(0);
+  const sdf::Model *outerModel = root.Model();
   ASSERT_NE(nullptr, outerModel);
   EXPECT_EQ("outer_model", outerModel->Name());
   EXPECT_EQ(1u, outerModel->LinkCount());
@@ -308,7 +312,7 @@ TEST(DOMRoot, MultiNestedModel)
 TEST(DOMLink, NestedModelPoseRelativeTo)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
+    sdf::testing::TestFile("sdf",
         "model_nested_model_relative_to.sdf");
 
   // Load the SDF file
@@ -318,7 +322,7 @@ TEST(DOMLink, NestedModelPoseRelativeTo)
   using Pose = ignition::math::Pose3d;
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("model_nested_model_relative_to", model->Name());
   EXPECT_EQ(1u, model->LinkCount());
@@ -391,15 +395,14 @@ TEST(DOMLink, NestedModelPoseRelativeTo)
 TEST(DOMRoot, LoadCanonicalLink)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "model_canonical_link.sdf");
+    sdf::testing::TestFile("sdf", "model_canonical_link.sdf");
 
   // Load the SDF file
   sdf::Root root;
   EXPECT_TRUE(root.Load(testFile).empty());
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("model_canonical_link", model->Name());
   EXPECT_EQ(2u, model->LinkCount());
@@ -433,15 +436,14 @@ TEST(DOMRoot, LoadCanonicalLink)
 TEST(DOMRoot, LoadNestedCanonicalLink)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "nested_canonical_link.sdf");
+    sdf::testing::TestFile("sdf", "nested_canonical_link.sdf");
 
   // Load the SDF file
   sdf::Root root;
   EXPECT_TRUE(root.Load(testFile).empty());
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("top", model->Name());
   EXPECT_EQ(0u, model->LinkCount());
@@ -494,7 +496,7 @@ TEST(DOMRoot, LoadNestedExplicitCanonicalLink)
   EXPECT_TRUE(root.Load(testFile).empty());
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
   EXPECT_EQ("top", model->Name());
   EXPECT_EQ(0u, model->LinkCount());
@@ -542,7 +544,7 @@ TEST(DOMRoot, ModelPlacementFrameAttribute)
   sdf::Errors errors = root.Load(testFile);
   EXPECT_TRUE(errors.empty()) << errors;
 
-  auto *model = root.ModelByIndex(0);
+  auto *model = root.Model();
   ASSERT_NE(nullptr, model);
 
   ignition::math::Pose3d pose;
@@ -564,7 +566,7 @@ TEST(DOMRoot, LoadInvalidNestedModelWithoutLinks)
   for (auto e : errors)
     std::cout << e << std::endl;
   EXPECT_FALSE(errors.empty());
-  EXPECT_EQ(7u, errors.size());
+  ASSERT_EQ(7u, errors.size());
   EXPECT_EQ(errors[0].Code(), sdf::ErrorCode::MODEL_WITHOUT_LINK);
   EXPECT_NE(std::string::npos,
     errors[0].Message().find("A model must have at least one link"));

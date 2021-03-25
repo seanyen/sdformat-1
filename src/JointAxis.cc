@@ -25,10 +25,11 @@
 #include "sdf/JointAxis.hh"
 #include "FrameSemantics.hh"
 #include "ScopedGraph.hh"
+#include "Utils.hh"
 
 using namespace sdf;
 
-class sdf::JointAxisPrivate
+class sdf::JointAxis::Implementation
 {
   /// \brief Default joint position for this joint axis.
   public: double initialPosition = 0.0;
@@ -92,40 +93,8 @@ class sdf::JointAxisPrivate
 
 /////////////////////////////////////////////////
 JointAxis::JointAxis()
-  : dataPtr(new JointAxisPrivate)
+  : dataPtr(ignition::utils::MakeImpl<Implementation>())
 {
-}
-
-/////////////////////////////////////////////////
-JointAxis::~JointAxis()
-{
-  delete this->dataPtr;
-  this->dataPtr = nullptr;
-}
-
-/////////////////////////////////////////////////
-JointAxis::JointAxis(const JointAxis &_jointAxis)
-  : dataPtr(new JointAxisPrivate(*_jointAxis.dataPtr))
-{
-}
-
-/////////////////////////////////////////////////
-JointAxis::JointAxis(JointAxis &&_jointAxis) noexcept
-  : dataPtr(std::exchange(_jointAxis.dataPtr, nullptr))
-{
-}
-
-/////////////////////////////////////////////////
-JointAxis &JointAxis::operator=(const JointAxis &_jointAxis)
-{
-  return *this = JointAxis(_jointAxis);
-}
-
-/////////////////////////////////////////////////
-JointAxis &JointAxis::operator=(JointAxis &&_jointAxis)
-{
-  std::swap(this->dataPtr, _jointAxis.dataPtr);
-  return *this;
 }
 
 /////////////////////////////////////////////////
@@ -229,17 +198,6 @@ sdf::Errors JointAxis::SetXyz(const ignition::math::Vector3d &_xyz)
 }
 
 /////////////////////////////////////////////////
-bool JointAxis::UseParentModelFrame() const
-{
-  return this->dataPtr->useParentModelFrame;
-}
-/////////////////////////////////////////////////
-void JointAxis::SetUseParentModelFrame(const bool _parentModelFrame)
-{
-  this->dataPtr->useParentModelFrame = _parentModelFrame;
-}
-
-/////////////////////////////////////////////////
 double JointAxis::Damping() const
 {
   return this->dataPtr->damping;
@@ -305,7 +263,7 @@ double JointAxis::Upper() const
 }
 
 /////////////////////////////////////////////////
-void JointAxis::SetUpper(const double _upper) const
+void JointAxis::SetUpper(const double _upper)
 {
   this->dataPtr->upper = _upper;
 }
@@ -313,7 +271,7 @@ void JointAxis::SetUpper(const double _upper) const
 /////////////////////////////////////////////////
 double JointAxis::Effort() const
 {
-  return this->dataPtr->effort;
+  return infiniteIfNegative(this->dataPtr->effort);
 }
 
 /////////////////////////////////////////////////
@@ -325,11 +283,11 @@ void JointAxis::SetEffort(double _effort)
 /////////////////////////////////////////////////
 double JointAxis::MaxVelocity() const
 {
-  return this->dataPtr->maxVelocity;
+  return infiniteIfNegative(this->dataPtr->maxVelocity);
 }
 
 /////////////////////////////////////////////////
-void JointAxis::SetMaxVelocity(const double _velocity) const
+void JointAxis::SetMaxVelocity(const double _velocity)
 {
   this->dataPtr->maxVelocity = _velocity;
 }
@@ -341,7 +299,7 @@ double JointAxis::Stiffness() const
 }
 
 /////////////////////////////////////////////////
-void JointAxis::SetStiffness(const double _stiffness) const
+void JointAxis::SetStiffness(const double _stiffness)
 {
   this->dataPtr->stiffness = _stiffness;
 }
@@ -353,7 +311,7 @@ double JointAxis::Dissipation() const
 }
 
 /////////////////////////////////////////////////
-void JointAxis::SetDissipation(const double _dissipation) const
+void JointAxis::SetDissipation(const double _dissipation)
 {
   this->dataPtr->dissipation = _dissipation;
 }

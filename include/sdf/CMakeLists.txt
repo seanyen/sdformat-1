@@ -21,7 +21,14 @@ set (headers
   Frame.hh
   Geometry.hh
   Gui.hh
+  Heightmap.hh
   Imu.hh
+  InterfaceElements.hh
+  InterfaceFrame.hh
+  InterfaceJoint.hh
+  InterfaceLink.hh
+  InterfaceModel.hh
+  InterfaceModelPoseGraph.hh
   Joint.hh
   JointAxis.hh
   Lidar.hh
@@ -34,6 +41,7 @@ set (headers
   Noise.hh
   Param.hh
   parser.hh
+  ParserConfig.hh
   Pbr.hh
   Physics.hh
   Plane.hh
@@ -42,6 +50,7 @@ set (headers
   SDFImpl.hh
   SemanticPose.hh
   Sensor.hh
+  Sky.hh
   Sphere.hh
   Surface.hh
   Types.hh

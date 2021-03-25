@@ -26,15 +26,14 @@
 TEST(Material, PbrDOM)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "material_pbr.sdf");
+    sdf::testing::TestFile("sdf", "material_pbr.sdf");
 
   // Load the SDF file into DOM
   sdf::Root root;
   EXPECT_TRUE(root.Load(testFile).empty());
 
   // Get the first model
-  const sdf::Model *model = root.ModelByIndex(0);
+  const sdf::Model *model = root.Model();
   ASSERT_NE(nullptr, model);
 
   // Get the first link
@@ -97,6 +96,10 @@ TEST(Material, PbrDOM)
 
     // emissive map
     EXPECT_EQ("emissive_map.png", workflow->EmissiveMap());
+
+    // light map
+    EXPECT_EQ("light_map.png", workflow->LightMap());
+    EXPECT_EQ(1u, workflow->LightMapTexCoordSet());
   }
 
   // visual specular workflow
@@ -148,6 +151,10 @@ TEST(Material, PbrDOM)
 
     // emissive map
     EXPECT_EQ("emissive_map.png", workflow->EmissiveMap());
+
+    // light map
+    EXPECT_EQ("light_map.png", workflow->LightMap());
+    EXPECT_EQ(2u, workflow->LightMapTexCoordSet());
   }
 
   // visual all
@@ -203,6 +210,10 @@ TEST(Material, PbrDOM)
 
       // emissive map
       EXPECT_EQ("emissive_map.png", workflow->EmissiveMap());
+
+      // light map
+      EXPECT_EQ("light_map.png", workflow->LightMap());
+      EXPECT_EQ(3u, workflow->LightMapTexCoordSet());
     }
     // metal
     {
@@ -237,6 +248,10 @@ TEST(Material, PbrDOM)
 
       // emissive map
       EXPECT_EQ("emissive_map.png", workflow->EmissiveMap());
+
+      // light map
+      EXPECT_EQ("light_map.png", workflow->LightMap());
+      EXPECT_EQ(0u, workflow->LightMapTexCoordSet());
     }
   }
 }
@@ -245,8 +260,7 @@ TEST(Material, PbrDOM)
 TEST(Material, MaterialPBR)
 {
   const std::string testFile =
-    sdf::filesystem::append(PROJECT_SOURCE_PATH, "test", "sdf",
-        "material_pbr.sdf");
+    sdf::testing::TestFile("sdf", "material_pbr.sdf");
 
   // load material pbr sdf file
   sdf::Errors errors;
@@ -343,6 +357,13 @@ TEST(Material, MaterialPBR)
     EXPECT_TRUE(metalElem->HasElement("emissive_map"));
     sdf::ElementPtr emissiveMapElem = metalElem->GetElement("emissive_map");
     EXPECT_EQ("emissive_map.png", emissiveMapElem->Get<std::string>());
+
+
+    // light map
+    EXPECT_TRUE(metalElem->HasElement("light_map"));
+    sdf::ElementPtr lightMapElem = metalElem->GetElement("light_map");
+    EXPECT_EQ("light_map.png", lightMapElem->Get<std::string>());
+    EXPECT_EQ(1u, lightMapElem->Get<unsigned int>("uv_set"));
   }
 
   // visual specular workflow
@@ -412,6 +433,12 @@ TEST(Material, MaterialPBR)
     EXPECT_TRUE(specularElem->HasElement("emissive_map"));
     sdf::ElementPtr emissiveMapElem = specularElem->GetElement("emissive_map");
     EXPECT_EQ("emissive_map.png", emissiveMapElem->Get<std::string>());
+
+    // light map
+    EXPECT_TRUE(specularElem->HasElement("light_map"));
+    sdf::ElementPtr lightMapElem = specularElem->GetElement("light_map");
+    EXPECT_EQ("light_map.png", lightMapElem->Get<std::string>());
+    EXPECT_EQ(2u, lightMapElem->Get<unsigned int>("uv_set"));
   }
 
   // visual all
@@ -484,6 +511,12 @@ TEST(Material, MaterialPBR)
       sdf::ElementPtr emissiveMapElem =
           specularElem->GetElement("emissive_map");
       EXPECT_EQ("emissive_map.png", emissiveMapElem->Get<std::string>());
+
+      // light map
+      EXPECT_TRUE(specularElem->HasElement("light_map"));
+      sdf::ElementPtr lightMapElem = specularElem->GetElement("light_map");
+      EXPECT_EQ("light_map.png", lightMapElem->Get<std::string>());
+      EXPECT_EQ(3u, lightMapElem->Get<unsigned int>("uv_set"));
     }
 
     {
@@ -538,8 +571,12 @@ TEST(Material, MaterialPBR)
       EXPECT_TRUE(metalElem->HasElement("emissive_map"));
       sdf::ElementPtr emissiveMapElem = metalElem->GetElement("emissive_map");
       EXPECT_EQ("emissive_map.png", emissiveMapElem->Get<std::string>());
+
+      // light map
+      EXPECT_TRUE(metalElem->HasElement("light_map"));
+      sdf::ElementPtr lightMapElem = metalElem->GetElement("light_map");
+      EXPECT_EQ("light_map.png", lightMapElem->Get<std::string>());
+      EXPECT_EQ(0u, lightMapElem->Get<unsigned int>("uv_set"));
     }
   }
 }
-
-
